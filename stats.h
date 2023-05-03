@@ -29,22 +29,30 @@ struct Stats {
     double DX, DY, DZ;
     int ND;
     
+    //Energy deposited cache
+    double _ADEP;
+    
     //Functions
-    Stats(int N0);
+    Stats();
+    Stats(int N0, int Z, int R, int T, int TH, int LVL);
     void print();
     void scatter(const vec& x, double t, double w0, double wf);
     void terminate(const vec& x, double t);
     double reflect(const vec& mu, double W, double m, bool BACK);
 };
 
-Stats::Stats(int N0) {
+Stats::Stats() {
+    Stats(1e6, 100, 100, 1, 50, 4);
+}
+
+Stats::Stats(int N0, int Z=100, int R=100, int T=1, int TH=50, int LVL=4) {
     //Set default resolution
     this->N0 = N0;
-    Zres = 100;          //Number of samples to grid in Z direction
-    Rres = 100;          //Number of radial samples to grid
-    Tres = 1;            //Number of time samples
-    THETAres = 50;       //Number of cos(theta) values for reflection
-    momentlvl = 4;       //Order of moments to calculate (only up to 4th order is implemented)
+    Zres = Z;              //Number of samples to grid in Z direction
+    Rres = R;              //Number of radial samples to grid
+    Tres = T;              //Number of time samples
+    THETAres = TH;         //Number of cos(theta) values for reflection
+    momentlvl = LVL;       //Order of moments to calculate (only up to 4th order is implemented)
     
     //Grid resolution
     dR = 1.0/Rres;
@@ -52,6 +60,7 @@ Stats::Stats(int N0) {
     dT = 1.0/Tres;
     dTHETA = CONST_PI/THETAres/2;
     depLifetime = 0;
+    _ADEP = 0;
     
     //Reflection and transmission
     Rdiffuse = 0;
@@ -204,12 +213,12 @@ double Stats::reflect(const vec& mu, double W, double m, bool BACK) {
 }
 
 void Stats::print() {
-    double ADEP = 0;
+    _ADEP = 0;
     cout<<"ENERGY DEPOSITED"<<endl;
     for (int j = 0; j < Zres; j ++) {
         for (int k = 0; k < Rres; k ++) {
             cout << scientific << setw(14) << DEP.at(j*Rres + k)/N0;
-            ADEP += DEP.at(j*Rres + k);
+            _ADEP += DEP.at(j*Rres + k);
         }
         cout<<endl;
     }
@@ -261,35 +270,35 @@ void Stats::print() {
     if (momentlvl > 0) {
         cout <<endl <<endl;
         cout << "Energy deposition moments (time) [ns**n]:" << endl;
-        cout << "  E[T]     = " << TMOMENT[0]/ADEP << endl;
+        cout << "  E[T]     = " << TMOMENT[0]/_ADEP << endl;
     } if (momentlvl > 1)
-        cout << "  E[T2]    = " << TMOMENT[1]/ADEP << endl;
+        cout << "  E[T2]    = " << TMOMENT[1]/_ADEP << endl;
     if (momentlvl > 2)
-        cout << "  E[T3]    = " << TMOMENT[2]/ADEP << endl;
+        cout << "  E[T3]    = " << TMOMENT[2]/_ADEP << endl;
     if (momentlvl > 3)
-        cout << "  E[T4]    = " << TMOMENT[3]/ADEP << endl;
+        cout << "  E[T4]    = " << TMOMENT[3]/_ADEP << endl;
     
     //Deposition energy moments (space)
     if (momentlvl > 0) {
         cout <<endl <<endl;
         cout << "Energy deposition moments (space) [nm**n]:" << endl;
-        cout << "  E[Z]    = " << MOMENTS[0]/ADEP << endl;
-        cout << "  E[R]    = " << MOMENTS[1]/ADEP << endl;
+        cout << "  E[Z]    = " << MOMENTS[0]/_ADEP << endl;
+        cout << "  E[R]    = " << MOMENTS[1]/_ADEP << endl;
     } if (momentlvl > 1) {
-        cout << "  E[Z2]   = " << MOMENTS[2]/ADEP << endl;
-        cout << "  E[RZ]   = " << MOMENTS[3]/ADEP << endl;
-        cout << "  E[R2]   = " << MOMENTS[4]/ADEP << endl;
+        cout << "  E[Z2]   = " << MOMENTS[2]/_ADEP << endl;
+        cout << "  E[RZ]   = " << MOMENTS[3]/_ADEP << endl;
+        cout << "  E[R2]   = " << MOMENTS[4]/_ADEP << endl;
     } if (momentlvl > 2) {
-        cout << "  E[Z3]   = " << MOMENTS[5]/ADEP << endl;
-        cout << "  E[Z2R]  = " << MOMENTS[6]/ADEP << endl;
-        cout << "  E[ZR2]  = " << MOMENTS[7]/ADEP << endl;
-        cout << "  E[R3]   = " << MOMENTS[8]/ADEP << endl;
+        cout << "  E[Z3]   = " << MOMENTS[5]/_ADEP << endl;
+        cout << "  E[Z2R]  = " << MOMENTS[6]/_ADEP << endl;
+        cout << "  E[ZR2]  = " << MOMENTS[7]/_ADEP << endl;
+        cout << "  E[R3]   = " << MOMENTS[8]/_ADEP << endl;
     } if (momentlvl > 3) {
-        cout << "  E[Z4]   = " << MOMENTS[9]/ADEP << endl;
-        cout << "  E[Z3R]  = " << MOMENTS[10]/ADEP << endl;
-        cout << "  E[Z2R2] = " << MOMENTS[11]/ADEP << endl;
-        cout << "  E[ZR3]  = " << MOMENTS[12]/ADEP << endl;
-        cout << "  E[R4]   = " << MOMENTS[13]/ADEP << endl;
+        cout << "  E[Z4]   = " << MOMENTS[9]/_ADEP << endl;
+        cout << "  E[Z3R]  = " << MOMENTS[10]/_ADEP << endl;
+        cout << "  E[Z2R2] = " << MOMENTS[11]/_ADEP << endl;
+        cout << "  E[ZR3]  = " << MOMENTS[12]/_ADEP << endl;
+        cout << "  E[R4]   = " << MOMENTS[13]/_ADEP << endl;
     }
     
     //Scattered energy moments (time)
@@ -345,7 +354,7 @@ void Stats::print() {
     cout << "Reflection/Transmission/Absorption coefficients [-] (relative [-]):" << endl;
     cout << "  Rdiffuse = " << fixed << setw(10) << Rdiffuse/N0 << endl;
     cout << "  Tdiffuse = " << fixed << setw(10) << Tdiffuse/N0 << endl;
-    cout << "  A        = " << fixed << setw(10) << ADEP/N0 << endl;
+    cout << "  A        = " << fixed << setw(10) << _ADEP/N0 << endl;
 
     //Diffusion coefficient
     cout << endl << endl;
