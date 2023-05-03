@@ -349,7 +349,7 @@ void Stats::print() {
 
     //Diffusion coefficient
     cout << endl << endl;
-    cout << "Incident diffusion coefficients [nm2/ns]:" << endl;
+    cout << "Diffusion coefficients [nm2/ns]:" << endl;
     cout << "  Dx = " << DX/ND/2 << endl;
     cout << "  Dy = " << DY/ND/2 << endl;
     cout << "  Dz = " << DZ/ND/2 << endl;
