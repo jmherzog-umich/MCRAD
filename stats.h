@@ -20,6 +20,7 @@ struct Stats {
     
     //Output arrays for energy deposition, scatter, etc.
     vector<double> DEP, SCAT, PENDEPTH, RADIUS, Rtheta, Ttheta;
+    vector<double> DEPOF, SCATOF;
     vector<bool> NONZERO;        //true if a particle interacted here
     
     //Initialize moments and other outputs
@@ -75,6 +76,10 @@ Stats::Stats(int N0, int Z=100, int R=100, int T=1, int TH=50, int LVL=4) {
     SCAT = vector<double>(Zres*Rres, 0.0);
     NONZERO = vector<bool>(Zres*Rres, false);
     
+    //Overflow arrays
+    DEPOF = vector<double>(2*Rres+Zres+2, 0.0);
+    SCATOF = vector<double>(2*Rres+Zres+2, 0.0);
+    
     //Penetration depth and beam radius
     PENDEPTH = vector<double>(Zres,0.0);
     RADIUS = vector<double>(Zres,0.0);
@@ -98,16 +103,37 @@ void Stats::scatter(const vec& x, double t, double w0, double wf) {
     //Initialize
     int binR, binZ;
 
-    //Calculate bins
-    binR = (x.r()/dR >= Rres) ? Rres-1 : (int)(x.r()/dR);
-    binZ = (x.Z/dZ >= Zres) ? Zres-1 : (int)(x.Z/dZ);
+    //Calculate bins and cap at +/-1 from 0 and Res
+    binR = (int)(x.r()/dR);
+    binZ = (int)(x.Z/dZ);
+    if (binR > Rres)
+        binR = Rres;
+    if (binZ < -1)
+        binZ = -1;
+    else if (binZ > Zres)
+        binZ = Zres;
     
     //Basic data
-    PENDEPTH.at(binZ) = PENDEPTH.at(binZ) + w0;
-    RADIUS.at(binZ) = RADIUS.at(binZ) + w0 * pow(x.r(), 2);
-    DEP.at(binZ*Rres + binR) = DEP.at(binZ*Rres + binR) + wf;
-    SCAT.at(binZ*Rres + binR) = SCAT.at(binZ*Rres + binR) + w0;
-    NONZERO.at(binZ*Rres + binR) = true;
+    if (binZ >= 0 and binZ < Zres) {
+        PENDEPTH.at(binZ) = PENDEPTH.at(binZ) + w0;
+        RADIUS.at(binZ) = RADIUS.at(binZ) + w0 * pow(x.r(), 2);
+    }
+    
+    //2D Arrays
+    if (binZ < 0) {
+        DEPOF.at(binR) = DEPOF.at(binR) + wf;
+        SCATOF.at(binR) = SCATOF.at(binR) + w0;
+    } else if (binZ >= Zres)  {
+        DEPOF.at(1+Rres+Zres+(Rres-binR)) = DEPOF.at(1+Rres+Zres+(Rres-binR)) + wf;
+        SCATOF.at(1+Rres+Zres+(Rres-binR)) = SCATOF.at(1+Rres+Zres+(Rres-binR)) + wf;
+    } else if (binR >= Rres) {
+        DEPOF.at(1+Rres+binZ) = DEPOF.at(1+Rres+binZ) + wf;
+        SCATOF.at(1+Rres+binZ) = SCATOF.at(1+Rres+binZ) + wf;
+    } else {
+        DEP.at(binZ*Rres + binR) = DEP.at(binZ*Rres + binR) + wf;
+        SCAT.at(binZ*Rres + binR) = SCAT.at(binZ*Rres + binR) + w0;
+        NONZERO.at(binZ*Rres + binR) = true;
+    }
     
     //Calculate moments
     if (momentlvl > 0) {
@@ -224,6 +250,11 @@ void Stats::print() {
     }
     cout<<endl;
     
+    //Calculate total absorbed even outside volume
+    double _ATOT = _ADEP;
+    for (long unsigned int j = 0; j < DEPOF.size(); j ++)
+      _ATOT += DEPOF.at(j);
+    
     //energy scattered (in mJ/mJ-incident)
     double ASCAT = 0;
     cout<<"ENERGY SCATTERED"<<endl;
@@ -241,6 +272,35 @@ void Stats::print() {
     for (int j = 0; j < Zres; j ++) {
         cout << scientific << setw(14) << PENDEPTH.at(j)/N0;
     }
+    cout<<endl<<endl;
+    
+    //Overflow matrices
+    cout<<"ENERGY DEPOSITED OUTSIDE GRID"<<endl;
+    cout<<"A(r; z < 0):        ";
+    for (int j = 0; j < Rres; j ++)
+        cout << scientific << setw(14) << DEPOF.at(j)/N0;
+    cout<<endl<<"A(r; z > L):        ";
+    for (int j = Rres; j > 0; j --)
+        cout << scientific << setw(14) << DEPOF.at(1+Rres+Zres + j)/N0;
+    cout<<endl<<"A(z; r > R):        ";
+    for (int j = 0; j < Zres; j ++)
+        cout << scientific << setw(14) << DEPOF.at(1+Rres+ j)/N0;
+    cout<<endl<<"A(z < 0, r > R):    " << scientific << setw(14) << DEPOF.at(Rres)/N0;
+    cout<<endl<<"A(z > L, r > R):    " << scientific << setw(14) << DEPOF.at(1+Rres+Zres)/N0;
+    cout<<endl<<endl;
+    
+    cout<<"ENERGY SCATTERED OUTSIDE GRID"<<endl;
+    cout<<"S(r; z < 0):        ";
+    for (int j = 0; j < Rres; j ++)
+        cout << scientific << setw(14) << SCATOF.at(j)/N0;
+    cout<<endl<<"S(r; z > L):        ";
+    for (int j = Rres; j > 0; j --)
+        cout << scientific << setw(14) << SCATOF.at(1+Rres+Zres + j)/N0;
+    cout<<endl<<"S(z; r > R):        ";
+    for (int j = 0; j < Zres; j ++)
+        cout << scientific << setw(14) << SCATOF.at(1+Rres+ j)/N0;
+    cout<<endl<<"S(z < 0, r > R):    " << scientific << setw(14) << SCATOF.at(Rres)/N0;
+    cout<<endl<<"S(z > L, r > R):    " << scientific << setw(14) << SCATOF.at(1+Rres+Zres)/N0;
     cout<<endl<<endl;
     
     //Beam radius at depth Z
@@ -351,10 +411,11 @@ void Stats::print() {
     
     //Reflection coefficients (total)
     cout << endl << endl;
-    cout << "Reflection/Transmission/Absorption coefficients [-] (relative [-]):" << endl;
+    cout << "Reflection/Transmission/Absorption coefficients [-]:" << endl;
     cout << "  Rdiffuse = " << fixed << setw(10) << Rdiffuse/N0 << endl;
     cout << "  Tdiffuse = " << fixed << setw(10) << Tdiffuse/N0 << endl;
     cout << "  A        = " << fixed << setw(10) << _ADEP/N0 << endl;
+    cout << "  Atotal   = " << fixed << setw(10) << _ATOT/N0 << endl;
 
     //Diffusion coefficient
     cout << endl << endl;

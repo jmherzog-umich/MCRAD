@@ -22,10 +22,26 @@ double cos_henyeyGreenstein(double g, double eps) {
 }
 
 ///
+//Rayleigh phase function
+///
+double p_rayleigh(const vec& mu1, const vec& mu2) {
+    return 0.75 * (1 - pow(mu1.dot(mu2),2));
+}
+double cos_rayleigh(double eps) {
+    eps = 2*eps - 1;      //Eps is cos(theta) so allow negative values too
+    double tmp = sqrt(4*eps*eps+1)+2*eps;
+    return (pow(tmp, 2.0/3.0)-1)/pow(tmp, 1.0/3.0);
+}
+
+
+///
 //Photon class
 ///
 struct Photon {
     public:
+        //Phase function definitions
+        enum PhaseFunction {HenyeyGreenstein=0, Rayleigh=1};
+    
         //Data members
         vec x;     //Position
         vec mu;    //Orientation
@@ -34,6 +50,8 @@ struct Photon {
         double g;  //Average scattering cos(a)
         bool isBallistic;   //Has the photon scattered yet?
         
+        static PhaseFunction phase;  //Phase function to use for calculation
+        
         //Functions
         //Default (empty) constructor
         Photon() {
@@ -41,6 +59,7 @@ struct Photon {
             mu.X = 0; mu.Y = 0; mu.Z = 1;
             W = 1; t = 0; g = 0;
             isBallistic = true;
+            phase = PhaseFunction::HenyeyGreenstein;
         };
         
         //Constructor for specific photon direction and position
@@ -52,7 +71,15 @@ struct Photon {
         //Scatter the photon
         void Scatter(double eps1, double eps2) {
             //Calculate new cos and sin
-            double cost = cos_henyeyGreenstein(g, eps1);
+            double cost;
+            switch (phase) {
+                case PhaseFunction::HenyeyGreenstein:
+                    cost = cos_henyeyGreenstein(g, eps1);
+                    break;
+                case PhaseFunction::Rayleigh:
+                    cost = cos_rayleigh(eps1);
+                    break;
+            }
             double sint = sqrt(1.0-cost*cost);
             
             //If we're moving very close to +/- Z, the solution simplifies
@@ -79,5 +106,7 @@ struct Photon {
             isBallistic = false;
         }
 };
+
+Photon::PhaseFunction Photon::phase = Photon::PhaseFunction::HenyeyGreenstein;
 
 #endif

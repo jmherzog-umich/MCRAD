@@ -13,6 +13,7 @@
 #include "stats.h"
 #include "vec.h"
 #include "photon.h"
+#include "utility.h"
 
 #ifndef _SIMINFO_H_
 #define _SIMINFO_H_
@@ -23,6 +24,22 @@
 using namespace std;
 
 class Simulation {
+    public:
+        Simulation();
+        void load(const string& fname);
+        void setup();
+        void run();
+        void genBeam();
+        void genFluor();
+        void print();
+        
+        enum SimFlags {
+            BackWall      = 0b00000001,     //Whether there is a backwall in the simulation or semi-infinite
+            FrontWall     = 0b00000010,     //Whether there is a front wall or semi-infinite
+            RadialWall    = 0b00000100,     //Whether there is a cylindrical wall or infinite
+            GaussBeam     = 0b00001000     //Whether beam is Gaussian or a top-hat
+        };
+    
     private:
         //Incident beam
         double Ss=5e5;                  //Scattering cross-section
@@ -40,6 +57,9 @@ class Simulation {
         double L=1e7;           //Length of sample [nm]
         double R=1e7;           //Radius of sample [nm]
         double T=300;           //Length of time to integrate [ns]
+        
+        //Sim Flags
+        SimFlags flags = (Simulation::SimFlags)3;
         
         //Beam parameters
         double Rb=5e5;          //Beam radius [nm]
@@ -67,16 +87,6 @@ class Simulation {
         
         //Methods
         double roll();
-    
-    //Methods
-    public:
-        Simulation();
-        void load(const string& fname);
-        void setup();
-        void run();
-        void genBeam();
-        void genFluor();
-        void print();
 };
 
 Simulation::Simulation() {
@@ -85,6 +95,7 @@ Simulation::Simulation() {
     Rb=5e5;
     Wmin = 1e-10; Wm = 0.1; maxstep = 5e6; 
     Zres = 100; Rres = 100; Tres = 1; THres = 50; momentlvl = 4;
+    flags = (Simulation::SimFlags)3;
 }
 
 template<class T>
@@ -112,13 +123,19 @@ void Simulation::genBeam() {
     
     //Initialize some values
     PHOTONS = vector<Photon>(N0, Photon(vec(),vec(sin0, 0, sqrt(1-sin0*sin0)), g));
-    WSCALE = (1.0 - (n0-n)*(n0-n)/(n0+n)/(n0+n)) * FQY;
+    if (flags & SimFlags::FrontWall)
+        WSCALE = (1.0 - (n0-n)*(n0-n)/(n0+n)/(n0+n));
+    else
+        WSCALE = 1.0;
     double eps, eps2;
     
     //Loop through and generate beam if needed
     if (Rb > 1) {
         for (int i = 0; i < N0; i ++) {
-            eps = Rb * sqrt(roll());
+            if (flags & SimFlags::GaussBeam)
+                eps = Rb * erfinvf((float)roll());
+            else
+                eps = Rb * sqrt(roll());
             eps2 = roll() * 2.0 * CONST_PI;
             PHOTONS.at(i).x.X += eps * cos(eps2);
             PHOTONS.at(i).x.Y += eps * sin(eps2);
@@ -186,7 +203,38 @@ void Simulation::setup() {
     double Rspec = (n0-n)*(n0-n)/(n0+n)/(n0+n);
     double Rx = (nx-n)*(nx-n)/(nx+n)/(nx+n); // I.n/I.nx = m -> Rx = (1-m)^2/(1+m)^2 
     double Tspec = 1.0 - Rspec;
-            
+    
+    //Print some settings
+    cout << endl << endl;
+    cout << "==================================================================" << endl;
+    cout << "Settings" << endl;
+    cout << "==================================================================" << endl;
+    cout << "Phase function: ";
+    switch (Photon::phase) {
+        case Photon::PhaseFunction::HenyeyGreenstein:
+            cout << "Henyey-Greenstein" << endl;
+            break;
+        case Photon::PhaseFunction::Rayleigh:
+            cout << "Rayleigh" << endl;
+            break;
+        default:
+            cout << "Other" << endl;
+            break;
+    }
+    cout << "g: " << g << endl;
+    cout << "Back Wall: " << ((flags & SimFlags::BackWall) ? "True" : "False" ) << endl;
+    cout << "Front Wall: " << ((flags & SimFlags::FrontWall) ? "True" : "False" ) << endl;
+    cout << "Radial Wall: " << ((flags & SimFlags::RadialWall) ? "True" : "False" ) << endl;
+    cout << "Gaussian Beam Profile: " << ((flags & SimFlags::GaussBeam) ? "True" : "False" ) << endl;
+    cout << "Photon packets: " << N0 << endl;
+    cout << "Scattering cross-section: " << Ss << endl;
+    cout << "Absorption cross-section: " << Sa << endl;
+    cout << "Front Refractive Index: " << n0 << endl;
+    cout << "Medium Refractive Index: " << n << endl;
+    cout << "Back Refractive Index: " << nx << endl;
+    cout << "Incident sin(theta): " << sin0 << endl;
+    cout << endl << endl;
+    
     //Warn the user
     cout << "==================================================================" << endl;
     cout << "Starting simulation" << endl;
@@ -227,7 +275,7 @@ void Simulation::run() {
     
     //Initialize a whole lot of temporary variables
     double eps, s, ds, mu, newZ, dt, newW, tempR, oldW;
-    bool done = false;
+    bool done = false, donestep = false;
     const vec NORM(R, R, L);
     
     //loop through steps
@@ -266,9 +314,10 @@ void Simulation::run() {
             
             //Check for boundary collision - only Z-direction for simplicity
             newZ = s*PHOTONS.at(i).mu.Z + PHOTONS.at(i).x.Z;
-            while ((newZ>L) || (newZ < 0)) {
+            donestep = false;
+            while (!donestep) {
                 //Look for transmission events (hitting back surface)
-                if (newZ>L) {
+                if ( (flags & SimFlags::BackWall) and (newZ>L)) {
                     //Find incremental shift, move to boundary and reflect
                     ds = (L-PHOTONS.at(i).x.Z)/PHOTONS.at(i).mu.Z;
                     s -= ds;
@@ -284,7 +333,7 @@ void Simulation::run() {
                 }
                 
                 //Look for reflection events (front surface interaction)
-                else {
+                else if ( (flags & SimFlags::FrontWall) and (newZ < 0)) {
                     //Find incremental shift, move to boundary and reflect
                     ds = -PHOTONS.at(i).x.Z/PHOTONS.at(i).mu.Z;
                     s -= ds;
@@ -298,6 +347,10 @@ void Simulation::run() {
                     PHOTONS.at(i).W = PHOTONS.at(i).W * tempR;
                     newZ = s*PHOTONS.at(i).mu.Z + PHOTONS.at(i).x.Z;
                 }
+                
+                //No walls or we haven't hit a wall, so continue
+                else
+                    donestep = true;
             }
             
             //Normal position update, absorption and scattering
@@ -358,6 +411,8 @@ void Simulation::load(const string& fname) {
         string cmd, key;
         stringstream cmdstr;
         ifstream ifile(fname);
+        int tmpint, tmpflags = (int)flags;
+        bool tmpbool;
         
         //Process line by line
         while (!ifile.eof()) {
@@ -411,6 +466,40 @@ void Simulation::load(const string& fname) {
                 cmdstr >> momentlvl;
             else if (!key.compare("FQY"))
                 cmdstr >> FQY;
+            //More complicated settings
+            else if (!key.compare("phase")) {
+                cmdstr >> tmpint;
+                Photon::phase = (Photon::PhaseFunction)tmpint;
+            } else if (!key.compare("backwall")) {
+                cmdstr >> tmpbool;
+                if (tmpbool)
+                    tmpflags |= SimFlags::BackWall;
+                else
+                    tmpflags &= ~(SimFlags::BackWall);
+                flags = (SimFlags) tmpflags;
+            } else if (!key.compare("frontwall")) {
+                cmdstr >> tmpbool;
+                if (tmpbool)
+                    tmpflags |= SimFlags::FrontWall;
+                else
+                    tmpflags &= ~(SimFlags::FrontWall);
+                flags = (SimFlags) tmpflags;
+            } else if (!key.compare("cylwall")) {
+                cmdstr >> tmpbool;
+                if (tmpbool)
+                    tmpflags |= SimFlags::RadialWall;
+                else
+                    tmpflags &= ~(SimFlags::RadialWall);
+                flags = (SimFlags) tmpflags;
+            }
+            else if (!key.compare("gaussbeam")) {
+                cmdstr >> tmpbool;
+                if (tmpbool)
+                    tmpflags |= SimFlags::GaussBeam;
+                else
+                    tmpflags &= ~(SimFlags::GaussBeam);
+                flags = (SimFlags) tmpflags;
+            }
             //Commands to run the program
             else if (!key.compare("run"))
                 run();

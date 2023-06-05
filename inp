@@ -1,0 +1,12 @@
+Ss 1e6
+Sa 1e4
+N0 10000
+dens 1e-11
+phase 1
+backwall 0
+frontwall 0
+gaussbeam 1
+setup
+genBeam
+run
+print
