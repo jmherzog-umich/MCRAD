@@ -233,6 +233,8 @@ void Simulation::setup() {
     cout << "Medium Refractive Index: " << n << endl;
     cout << "Back Refractive Index: " << nx << endl;
     cout << "Incident sin(theta): " << sin0 << endl;
+    cout << "Albedo: " << Ss/(Ss+Sa) << endl;
+    cout << "Theoretical Max Step Count: " << ceil(log(Wmin)/log(Ss/(Ss+Sa)) + 1.0/Wm) << endl;
     cout << endl << endl;
     
     //Warn the user
@@ -325,7 +327,7 @@ void Simulation::run() {
                     PHOTONS.at(i).mu.Z = -PHOTONS.at(i).mu.Z;
                     
                     //Calculate reflection coefficient and count reflection in output
-                    tempR = OUT.reflect(PHOTONS.at(i).mu, PHOTONS.at(i).W*WSCALE, n/nx, true);
+                    tempR = OUT.reflect(PHOTONS.at(i).mu, PHOTONS.at(i).W*WSCALE, n/nx, true, PHOTONS.at(i).isBallistic);
                         
                     //update the newZ value
                     PHOTONS.at(i).W = PHOTONS.at(i).W * tempR;

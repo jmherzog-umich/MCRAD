@@ -16,7 +16,7 @@ struct Stats {
     //Settings
     int N0, Zres, Rres, Tres, THETAres, momentlvl;
     double dR, dZ, dT, dTHETA, depLifetime;
-    double Rdiffuse, Tdiffuse;
+    double Rdiffuse, Tdiffuse, Tballistic;
     
     //Output arrays for energy deposition, scatter, etc.
     vector<double> DEP, SCAT, PENDEPTH, RADIUS, Rtheta, Ttheta;
@@ -39,7 +39,7 @@ struct Stats {
     void print();
     void scatter(const vec& x, double t, double w0, double wf);
     void terminate(const vec& x, double t);
-    double reflect(const vec& mu, double W, double m, bool BACK);
+    double reflect(const vec& mu, double W, double m, bool BACK, bool isBallistic=false);
 };
 
 Stats::Stats() {
@@ -66,6 +66,7 @@ Stats::Stats(int N0, int Z=100, int R=100, int T=1, int TH=50, int LVL=4) {
     //Reflection and transmission
     Rdiffuse = 0;
     Tdiffuse = 0;
+    Tballistic = 0;
     
     //Diffusion coefficients
     DX = DY = DZ = 0;
@@ -194,7 +195,7 @@ void Stats::terminate(const vec& x, double t) {
     ND ++;
 }
 
-double Stats::reflect(const vec& mu, double W, double m, bool BACK) {
+double Stats::reflect(const vec& mu, double W, double m, bool BACK, bool isBallistic) {
     //Calculate theta from Snell's law
     double R, cost, sint;
     double R0 = (1.0-m)*(1.0-m)/(1.0+m)/(1.0+m);
@@ -220,6 +221,8 @@ double Stats::reflect(const vec& mu, double W, double m, bool BACK) {
     if (BACK) {
         Tdiffuse += (1-R) * W;
         Ttheta.at(binTHETA) += W * (1-R);
+        if (isBallistic)
+            Tballistic += W * (1-R);
     }else{
         Rdiffuse += (1-R) * W;
         Rtheta.at(binTHETA) += W * (1-R);
@@ -412,10 +415,11 @@ void Stats::print() {
     //Reflection coefficients (total)
     cout << endl << endl;
     cout << "Reflection/Transmission/Absorption coefficients [-]:" << endl;
-    cout << "  Rdiffuse = " << fixed << setw(10) << Rdiffuse/N0 << endl;
-    cout << "  Tdiffuse = " << fixed << setw(10) << Tdiffuse/N0 << endl;
-    cout << "  A        = " << fixed << setw(10) << _ADEP/N0 << endl;
-    cout << "  Atotal   = " << fixed << setw(10) << _ATOT/N0 << endl;
+    cout << "  Rdiffuse   = " << fixed << setw(10) << Rdiffuse/N0 << endl;
+    cout << "  Tdiffuse   = " << fixed << setw(10) << Tdiffuse/N0 << endl;
+    cout << "  Tballistic = " << fixed << setw(10) << Tballistic/N0 << endl;
+    cout << "  A          = " << fixed << setw(10) << _ADEP/N0 << endl;
+    cout << "  Atotal     = " << fixed << setw(10) << _ATOT/N0 << endl;
 
     //Diffusion coefficient
     cout << endl << endl;
