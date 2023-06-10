@@ -40,7 +40,7 @@ double cos_rayleigh(double eps) {
 struct Photon {
     public:
         //Phase function definitions
-        enum PhaseFunction {HenyeyGreenstein=0, Rayleigh=1};
+        enum struct PhaseFunction {HenyeyGreenstein=0, Rayleigh=1};
     
         //Data members
         vec x;     //Position

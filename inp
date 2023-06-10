@@ -1,7 +1,11 @@
 Ss 1e6
 Sa 1e4
-N0 10000
-dens 5-10
+N0 100000
+Rres 20
+Zres 20
+dens 5e-13
+R 100000
+Rb 50000
 phase 0
 backwall 1
 frontwall 1

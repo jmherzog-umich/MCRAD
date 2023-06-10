@@ -15,13 +15,16 @@ using namespace std;
 struct Stats {
     //Settings
     int N0, Zres, Rres, Tres, THETAres, momentlvl;
-    double dR, dZ, dT, dTHETA, depLifetime;
+    double dR, dZ, dT, dTHETA;
     double Rdiffuse, Tdiffuse, Tballistic;
     
     //Output arrays for energy deposition, scatter, etc.
     vector<double> DEP, SCAT, PENDEPTH, RADIUS, Rtheta, Ttheta;
     vector<double> DEPOF, SCATOF;
     vector<bool> NONZERO;        //true if a particle interacted here
+    
+    //Input and output beam arrays
+    vector<double> I0, It, Ir;
     
     //Initialize moments and other outputs
     vector<double> MOMENTS, SMOMENTS, THMOMENT, TMOMENT, STMOMENT;
@@ -30,16 +33,30 @@ struct Stats {
     double DX, DY, DZ;
     int ND;
     
+    //Transmission/reflection scattering order
+    double Nr, Nt, N2r, N2t;
+    
+    //Transmission/reflection times
+    double tRd, tTd, t2Rd, t2Td;
+    
     //Energy deposited cache
     double _ADEP;
     
     //Functions
+    //--Constructors
     Stats();
     Stats(int N0, int Z, int R, int T, int TH, int LVL);
+    
+    //--Print results functions
     void print();
+    void printIC();
+    void printProfiles();
+    
+    //--Functions to aggregate data
     void scatter(const vec& x, double t, double w0, double wf);
-    void terminate(const vec& x, double t);
-    double reflect(const vec& mu, double W, double m, bool BACK, bool isBallistic=false);
+    void diffusion(const vec& x, double w, double t);
+    void initialize(const vec& x, double w);
+    double reflect(const vec& x, const vec& mu, double t, double W, double m, bool BACK, unsigned int N, bool isBallistic=false);
 };
 
 Stats::Stats() {
@@ -60,7 +77,6 @@ Stats::Stats(int N0, int Z=100, int R=100, int T=1, int TH=50, int LVL=4) {
     dZ = 1.0/Zres;
     dT = 1.0/Tres;
     dTHETA = CONST_PI/THETAres/2;
-    depLifetime = 0;
     _ADEP = 0;
     
     //Reflection and transmission
@@ -72,10 +88,19 @@ Stats::Stats(int N0, int Z=100, int R=100, int T=1, int TH=50, int LVL=4) {
     DX = DY = DZ = 0;
     ND = 0;
     
+    //Scattering order and time stats
+    Nr = Nt = N2r = N2t = 0;
+    tRd = tTd = t2Rd = t2Td = 0;
+    
     //Output arrays for energy deposition, scatter, etc.
     DEP = vector<double>(Zres*Rres, 0.0);
     SCAT = vector<double>(Zres*Rres, 0.0);
     NONZERO = vector<bool>(Zres*Rres, false);
+    
+    //Beam array images
+    I0 = vector<double>((2*Rres+1)*(2*Rres+1), 0.0);
+    It = vector<double>((2*Rres+1)*(2*Rres+1), 0.0);
+    Ir = vector<double>((2*Rres+1)*(2*Rres+1), 0.0);
     
     //Overflow arrays
     DEPOF = vector<double>(2*Rres+Zres+2, 0.0);
@@ -95,9 +120,6 @@ Stats::Stats(int N0, int Z=100, int R=100, int T=1, int TH=50, int LVL=4) {
     THMOMENT = vector<double>(8, 0.0);
     TMOMENT = vector<double>(4, 0.0);
     STMOMENT = vector<double>(4, 0.0);
-    
-    //Other output of initialized variables
-    cout << "Grid resolution: " << Rres << " x " << Zres << endl;
 }
 
 void Stats::scatter(const vec& x, double t, double w0, double wf) {
@@ -185,17 +207,20 @@ void Stats::scatter(const vec& x, double t, double w0, double wf) {
         SMOMENTS.at(13) += w0*pow(x.r(),4);
         STMOMENT.at(3) += w0*pow(t,4);
     }
+    
+    //Calculate diffusion properties
+    diffusion(x, w0, t);
+    
 }
 
-void Stats::terminate(const vec& x, double t) {
-    DX += pow(x.X,2)/t; //Add to average diffusion coefficient
-    DY += pow(x.Y,2)/t; //Y component
-    DZ += pow(x.Z,2)/t; //Z component
-    depLifetime += t;
-    ND ++;
+void Stats::diffusion(const vec& x, double w, double t) {
+    DX += w*pow(x.X,2)/t; //Add to average diffusion coefficient
+    DY += w*pow(x.Y,2)/t; //Y component
+    DZ += w*pow(x.Z,2)/t; //Z component
+    ND += w;
 }
 
-double Stats::reflect(const vec& mu, double W, double m, bool BACK, bool isBallistic) {
+double Stats::reflect(const vec& x, const vec& mu, double t, double W, double m, bool BACK, unsigned int N, bool isBallistic) {
     //Calculate theta from Snell's law
     double R, cost, sint;
     double R0 = (1.0-m)*(1.0-m)/(1.0+m)/(1.0+m);
@@ -216,6 +241,17 @@ double Stats::reflect(const vec& mu, double W, double m, bool BACK, bool isBalli
     
     //Bin in exit angle
     binTHETA = (sint/dTHETA >= THETAres) ? THETAres-1 : (int) (sint/dTHETA);
+    
+    //Get x and y bins, and increment transmission/reflection beam images
+    int binX = (int)(x.X/dR) + Rres;
+    int binY = (int)(x.Y/dR) + Rres;
+    if ((binX >= 0) && (binX <= 2*Rres) && (binY >= 0) && (binY <= 2*Rres)) {
+        if (BACK) {
+            It.at(binY*(2*Rres+1)+binX) += (1-R) * W;
+        } else {
+            Ir.at(binY*(2*Rres+1)+binX) += (1-R) * W;
+        }
+    }
     
     //Increment transmission
     if (BACK) {
@@ -238,10 +274,74 @@ double Stats::reflect(const vec& mu, double W, double m, bool BACK, bool isBalli
     if (momentlvl > 3)
         THMOMENT.at(3+(BACK ? 4 : 0)) += W * (1-R) * pow(sint,4);
         
+    //Increment reflection/transmission times and orders
+    if (BACK) {
+        Nt += N * (1-R) * W;
+        N2t += N*N * (1-R) * W;
+        tTd += t * (1-R) * W;
+        t2Td += t*t * (1-R) * W;
+    } else {
+        Nr += N * (1-R) * W;
+        N2r += N*N * (1-R) * W;
+        tRd += t * (1-R) * W;
+        t2Rd += t*t * (1-R) * W;
+    }
+    //Return reflection coeff
     return R;
 }
 
+void Stats::initialize(const vec& x, double w) {
+    int binX = (int)(x.X/dR) + Rres;
+    int binY = (int)(x.Y/dR) + Rres;
+    if ((binX >= 0) && (binX <= 2*Rres) && (binY >= 0) && (binY <= 2*Rres))
+        I0.at(binY*(2*Rres+1) + binX) += w;
+}
+
+void Stats::printIC() {
+    double total = 0;
+    for (unsigned long int j = 0; j < I0.size(); j ++) total += I0.at(j);
+    cout << "INITIAL CONDITION:" << endl;
+    for (int j = 0; j <= 2*Rres; j ++) {
+        for (int k = 0; k <= 2*Rres; k ++) {
+            cout << scientific << setw(14) << I0.at(j*(2*Rres+1) + k) / total;
+        }
+        cout << endl;
+    }
+    cout << endl;
+}
+
+void Stats::printProfiles() {
+    double total1 = 0;
+    double total2 = 0;
+    for (unsigned long int j = 0; j < Ir.size(); j ++) {
+        total1 += Ir.at(j);
+        total2 += It.at(j);
+    }
+    cout << "TRANSMITTED BEAM PROFILE:" << endl;
+    for (int j = 0; j <= 2*Rres; j ++) {
+        for (int k = 0; k <= 2*Rres; k ++) {
+            cout << scientific << setw(14) << It.at(j*(2*Rres+1) + k) / total2;
+        }
+        cout << endl;
+    }
+    cout << endl;
+    
+    cout << "REFLECTED BEAM PROFILE:" << endl;
+    for (int j = 0; j <= 2*Rres; j ++) {
+        for (int k = 0; k <= 2*Rres; k ++) {
+            cout << scientific << setw(14) << Ir.at(j*(2*Rres+1) + k) / total1;
+        }
+        cout << endl;
+    }
+    cout << endl;
+}
+
 void Stats::print() {
+    //Print initial condition first
+    printIC();
+    printProfiles();
+    
+    //Now print energy deposition
     _ADEP = 0;
     cout<<"ENERGY DEPOSITED"<<endl;
     for (int j = 0; j < Zres; j ++) {
@@ -307,7 +407,7 @@ void Stats::print() {
     cout<<endl<<endl;
     
     //Beam radius at depth Z
-    cout<<"BEAM RADIUS (STANDARD DEVIATION) AT DEPTH Z"<<endl;
+    cout<<"BEAM RADIUS (STANDARD DEVIATION) AT DEPTH Z [nm/nm]"<<endl;
     for (int j = 0; j < Zres; j ++) {
         RADIUS.at(j) = sqrt(RADIUS.at(j)/PENDEPTH.at(j));
         cout << scientific << setw(14) << RADIUS.at(j); 
@@ -332,7 +432,7 @@ void Stats::print() {
     //Deposition energy moments (time)
     if (momentlvl > 0) {
         cout <<endl <<endl;
-        cout << "Energy deposition moments (time) [ns**n]:" << endl;
+        cout << "Energy deposition moments (time) [(ns/ns)**n]:" << endl;
         cout << "  E[T]     = " << TMOMENT[0]/_ADEP << endl;
     } if (momentlvl > 1)
         cout << "  E[T2]    = " << TMOMENT[1]/_ADEP << endl;
@@ -344,7 +444,7 @@ void Stats::print() {
     //Deposition energy moments (space)
     if (momentlvl > 0) {
         cout <<endl <<endl;
-        cout << "Energy deposition moments (space) [nm**n]:" << endl;
+        cout << "Energy deposition moments (space) [(nm/nm)**n]:" << endl;
         cout << "  E[Z]    = " << MOMENTS[0]/_ADEP << endl;
         cout << "  E[R]    = " << MOMENTS[1]/_ADEP << endl;
     } if (momentlvl > 1) {
@@ -367,7 +467,7 @@ void Stats::print() {
     //Scattered energy moments (time)
     if (momentlvl > 0) {
         cout <<endl <<endl;
-        cout << "Energy scatter moments (time) [ns**n]:" << endl;
+        cout << "Energy scatter moments (time) [(ns/ns)**n]:" << endl;
         cout << "  E[T]     = " << STMOMENT[0]/ASCAT << endl;
     } if (momentlvl > 1)
         cout << "  E[T2]    = " << STMOMENT[1]/ASCAT << endl;
@@ -379,7 +479,7 @@ void Stats::print() {
     //Scattered energy moments (space)
     if (momentlvl > 0) {
         cout <<endl <<endl;
-        cout << "Energy scatter moments (space) [nm**n]:" << endl;
+        cout << "Energy scatter moments (space) [(nm/nm)**n]:" << endl;
         cout << "  E[Z]    = " << SMOMENTS[0]/ASCAT << endl;
         cout << "  E[R]    = " << SMOMENTS[1]/ASCAT << endl;
     } if (momentlvl > 1) {
@@ -420,10 +520,22 @@ void Stats::print() {
     cout << "  Tballistic = " << fixed << setw(10) << Tballistic/N0 << endl;
     cout << "  A          = " << fixed << setw(10) << _ADEP/N0 << endl;
     cout << "  Atotal     = " << fixed << setw(10) << _ATOT/N0 << endl;
+    
+    //Reflection time/order
+    cout << endl << endl;
+    cout << "Diffuse Reflection/Transmission scattering order (mean, std) [-] and duration (mean, std) [ns/ns]:" << endl;
+    cout << "  N[Rdiffuse]      = " << fixed << setw(10) << Nr / Rdiffuse << endl;
+    cout << "  N[Tdiffuse]      = " << fixed << setw(10) << Nt / Tdiffuse << endl;
+    cout << "  dN[Rdiffuse]     = " << fixed << setw(10) << sqrt(N2r*Rdiffuse - Nr*Nr) / Rdiffuse << endl;
+    cout << "  dN[Tdiffuse]     = " << fixed << setw(10) << sqrt(N2t*Tdiffuse - Nt*Nt) / Tdiffuse << endl;
+    cout << "  t[Rdiffuse]      = " << fixed << setw(10) << tRd / Rdiffuse << endl;
+    cout << "  t[Tdiffuse]      = " << fixed << setw(10) << tTd / Tdiffuse << endl;
+    cout << "  dt[Rdiffuse]     = " << fixed << setw(10) << sqrt(t2Rd*Rdiffuse - tRd*tRd) / Rdiffuse << endl;
+    cout << "  dt[Tdiffuse]     = " << fixed << setw(10) << sqrt(t2Td*Tdiffuse - tTd*tTd) / Tdiffuse << endl;
 
     //Diffusion coefficient
     cout << endl << endl;
-    cout << "Diffusion coefficients [nm2/ns]:" << endl;
+    cout << "Diffusion coefficients [(nm2/ns)/(nm2/ns)]:" << endl;
     cout << "  Dx = " << DX/ND/2 << endl;
     cout << "  Dy = " << DY/ND/2 << endl;
     cout << "  Dz = " << DZ/ND/2 << endl;

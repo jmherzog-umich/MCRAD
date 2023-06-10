@@ -33,12 +33,15 @@ class Simulation {
         void genFluor();
         void print();
         
-        enum SimFlags {
+        enum struct SimFlags {
             BackWall      = 0b00000001,     //Whether there is a backwall in the simulation or semi-infinite
             FrontWall     = 0b00000010,     //Whether there is a front wall or semi-infinite
             RadialWall    = 0b00000100,     //Whether there is a cylindrical wall or infinite
-            GaussBeam     = 0b00001000     //Whether beam is Gaussian or a top-hat
         };
+        
+        //Definition for beam geometries and spread functions
+        enum struct BeamSpread { Collimated = 0, Uniform = 1, Gaussian = 2, Lambertian = 3, Isotropic = 4};
+        enum struct BeamType { TopHat = 0, Gaussian = 1, TopHatEllipse = 2, GaussianEllipse = 3, TopHatAnnulus = 4, GaussianAnnulus = 5};
     
     private:
         //Incident beam
@@ -60,14 +63,18 @@ class Simulation {
         
         //Sim Flags
         SimFlags flags = (Simulation::SimFlags)3;
+        BeamType beamprofile = Simulation::BeamType::TopHat;
+        BeamSpread spreadfxn = Simulation::BeamSpread::Collimated;
         
         //Beam parameters
         double Rb=5e5;          //Beam radius [nm]
+        double Pb=0;            //Beam spread parameter: standard deviation (gauss)/width (uniform)
+        double Sb=2.5e5;        //Beam profile parameter: linewidth (TopHatEllipse, Guass1D), Inner radius (TopHatAnnulus, GaussianAnnulus)
         
         //Convergence and other settings
         double Wmin = 1e-10;    //Start terminating packets if they get this small
         double Wm = 0.1;        //Weighting for Roulette termination procedure
-        int maxstep = 5e6;      //Maximum number of steps before terminating program
+        unsigned int maxstep = 5e6;      //Maximum number of steps before terminating program
         
         //Stats settings
         int Zres = 100;
@@ -96,6 +103,8 @@ Simulation::Simulation() {
     Wmin = 1e-10; Wm = 0.1; maxstep = 5e6; 
     Zres = 100; Rres = 100; Tres = 1; THres = 50; momentlvl = 4;
     flags = (Simulation::SimFlags)3;
+    spreadfxn = Simulation::BeamSpread::Collimated;
+    beamprofile = Simulation::BeamType::TopHat;
 }
 
 template<class T>
@@ -123,22 +132,88 @@ void Simulation::genBeam() {
     
     //Initialize some values
     PHOTONS = vector<Photon>(N0, Photon(vec(),vec(sin0, 0, sqrt(1-sin0*sin0)), g));
-    if (flags & SimFlags::FrontWall)
+    if ((int)flags & (int)SimFlags::FrontWall)
         WSCALE = (1.0 - (n0-n)*(n0-n)/(n0+n)/(n0+n));
     else
         WSCALE = 1.0;
     double eps, eps2;
+    const vec NORM(R, R, L);
     
     //Loop through and generate beam if needed
+    double x,y;
     if (Rb > 1) {
         for (int i = 0; i < N0; i ++) {
-            if (flags & SimFlags::GaussBeam)
-                eps = Rb * erfinvf((float)roll());
-            else
-                eps = Rb * sqrt(roll());
-            eps2 = roll() * 2.0 * CONST_PI;
-            PHOTONS.at(i).x.X += eps * cos(eps2);
-            PHOTONS.at(i).x.Y += eps * sin(eps2);
+            //Random numbers
+            eps2 = roll();
+            eps = roll();
+        
+            //Use the randos to generate x,y values based on model
+            switch (beamprofile) {
+                case Simulation::BeamType::TopHat :
+                    x = Rb * sqrt(eps) * cos(2.0 * CONST_PI * eps2);
+                    y = Rb * sqrt(eps) * sin(2.0 * CONST_PI * eps2);
+                    break;
+                    
+                case Simulation::BeamType::Gaussian :
+                    x = Rb * erfinvf((float)eps);
+                    y = x * sin(2.0 * CONST_PI * eps2);
+                    x = x * cos(2.0 * CONST_PI * eps2);
+                    break;
+                    
+                case Simulation::BeamType::TopHatEllipse :
+                    eps2 = atan(Sb/Rb*tan(2*CONST_PI*eps2));
+                    eps = Sb*Rb/sqrt(pow(Sb*cos(eps2),2)+pow(Rb*sin(eps2),2)) * sqrt(eps);
+                    x = eps*cos(eps2);
+                    y = eps*sin(eps2);
+                    break;
+                    
+                case Simulation::BeamType::GaussianEllipse :
+                    x = Rb * erfinvf((float)eps);
+                    y = Sb * erfinvf((float)eps2);
+                    break;
+                    
+                case Simulation::BeamType::TopHatAnnulus :
+                    x = sqrt(Sb*Sb + (Rb*Rb-Sb*Sb)*eps) * cos(2.0 * CONST_PI * eps2);
+                    y = sqrt(Sb*Sb + (Rb*Rb-Sb*Sb)*eps) * sin(2.0 * CONST_PI * eps2);
+                    break;
+                    
+                case Simulation::BeamType::GaussianAnnulus :
+                    x = Rb + Sb * erfinvf((float)eps);
+                    y = x * sin(2.0 * CONST_PI * eps2);
+                    x = x * cos(2.0 * CONST_PI * eps2);
+                    break;
+            }
+            
+            //Set the positions
+            PHOTONS.at(i).x.X += x;
+            PHOTONS.at(i).x.Y += y;
+        }
+    }
+    
+    //Generate the random directions now if we have them
+    for (int i = 0; i < N0; i ++) {
+        //Add to stats IC
+        OUT.initialize(PHOTONS.at(i).x/NORM, PHOTONS.at(i).W);
+        //Continue if the beam is collimated
+        if (spreadfxn == Simulation::BeamSpread::Collimated)
+            continue;
+    
+        //Random numbers
+        eps2 = roll()*2*CONST_PI; //Azimuthal angle
+        eps = roll();
+        
+        //Sample distributions
+        switch (spreadfxn) {
+            case Simulation::BeamSpread::Collimated :
+                break;
+            case Simulation::BeamSpread::Uniform :
+                break;
+            case Simulation::BeamSpread::Gaussian :
+                break;
+            case Simulation::BeamSpread::Lambertian :
+                break;
+            case Simulation::BeamSpread::Isotropic :
+                break;
         }
     }
 }
@@ -211,21 +286,35 @@ void Simulation::setup() {
     cout << "==================================================================" << endl;
     cout << "Phase function: ";
     switch (Photon::phase) {
-        case Photon::PhaseFunction::HenyeyGreenstein:
-            cout << "Henyey-Greenstein" << endl;
-            break;
-        case Photon::PhaseFunction::Rayleigh:
-            cout << "Rayleigh" << endl;
-            break;
-        default:
-            cout << "Other" << endl;
-            break;
+        case Photon::PhaseFunction::HenyeyGreenstein: cout << "Henyey-Greenstein" << endl; break;
+        case Photon::PhaseFunction::Rayleigh: cout << "Rayleigh" << endl; break;
+        default: cout << "Other" << endl; break;
     }
+    cout << "Beam profile: ";
+    switch (beamprofile) {
+        case Simulation::BeamType::TopHat : cout << "Top Hat (r = " << Rb << ")" << endl;  break;
+        case Simulation::BeamType::Gaussian : cout << "Gaussian (sigma = " << Rb << ")" << endl; break;
+        case Simulation::BeamType::TopHatEllipse : cout << "Elliptical Top Hat (a = " << Rb << ", b = " << Sb << ")" << endl; break;
+        case Simulation::BeamType::GaussianEllipse : cout << "Elliptical Gaussian (sigmax = " << Rb << ", sigmay = " << Sb << ")" << endl; break;
+        case Simulation::BeamType::TopHatAnnulus : cout << "Annular Top Hat (ri = " << Sb << ", ro = " << Rb << ")" << endl; break;
+        case Simulation::BeamType::GaussianAnnulus : cout << "Annular Gaussian (mu = " << Rb << ", sigma = " << Sb << ")" << endl; break;
+        default : cout << "Other" << endl; break;
+    }
+    
+    cout << "Beam spread function: ";
+    switch (spreadfxn) {
+        case Simulation::BeamSpread::Collimated : cout << "Collimated" << endl; break;
+        case Simulation::BeamSpread::Uniform : cout << "Uniform [0," << Pb << ")" << endl; break;
+        case Simulation::BeamSpread::Gaussian : cout << "Gaussian (sigma = " << Pb << ")" << endl; break;
+        case Simulation::BeamSpread::Lambertian : cout << "Lambertian [0, " << Pb << ")" << endl; break;
+        case Simulation::BeamSpread::Isotropic : cout << "Isotropic [0, " << Pb << ")" << endl; break;
+        default: cout << "Other" << endl; break;
+    }
+    
     cout << "g: " << g << endl;
-    cout << "Back Wall: " << ((flags & SimFlags::BackWall) ? "True" : "False" ) << endl;
-    cout << "Front Wall: " << ((flags & SimFlags::FrontWall) ? "True" : "False" ) << endl;
-    cout << "Radial Wall: " << ((flags & SimFlags::RadialWall) ? "True" : "False" ) << endl;
-    cout << "Gaussian Beam Profile: " << ((flags & SimFlags::GaussBeam) ? "True" : "False" ) << endl;
+    cout << "Back Wall: " << (((int)flags & (int)SimFlags::BackWall) ? "True" : "False" ) << endl;
+    cout << "Front Wall: " << (((int)flags & (int)SimFlags::FrontWall) ? "True" : "False" ) << endl;
+    cout << "Radial Wall: " << (((int)flags & (int)SimFlags::RadialWall) ? "True" : "False" ) << endl;
     cout << "Photon packets: " << N0 << endl;
     cout << "Scattering cross-section: " << Ss << endl;
     cout << "Absorption cross-section: " << Sa << endl;
@@ -281,7 +370,7 @@ void Simulation::run() {
     const vec NORM(R, R, L);
     
     //loop through steps
-    int STEP = 0; 
+    unsigned int STEP = 0; 
     while (STEP <= maxstep) {
         
         //Prepare for loop
@@ -296,7 +385,6 @@ void Simulation::run() {
                 break;
             while (PHOTONS.at(i).W <= Wmin) {                          //Loop until W!=0
                 if (i < PHOTONS.size()-1) {                            //If not end...
-                    OUT.terminate(PHOTONS.at(i).x/NORM, PHOTONS.at(i).t/T);
                     remove(PHOTONS, i);                                // delete and continue
                 } else {                                                //Otherwise
                     if (i == 0)
@@ -319,7 +407,7 @@ void Simulation::run() {
             donestep = false;
             while (!donestep) {
                 //Look for transmission events (hitting back surface)
-                if ( (flags & SimFlags::BackWall) and (newZ>L)) {
+                if ( ((int)flags & (int)SimFlags::BackWall) and (newZ>L)) {
                     //Find incremental shift, move to boundary and reflect
                     ds = (L-PHOTONS.at(i).x.Z)/PHOTONS.at(i).mu.Z;
                     s -= ds;
@@ -327,7 +415,7 @@ void Simulation::run() {
                     PHOTONS.at(i).mu.Z = -PHOTONS.at(i).mu.Z;
                     
                     //Calculate reflection coefficient and count reflection in output
-                    tempR = OUT.reflect(PHOTONS.at(i).mu, PHOTONS.at(i).W*WSCALE, n/nx, true, PHOTONS.at(i).isBallistic);
+                    tempR = OUT.reflect(PHOTONS.at(i).x/NORM, PHOTONS.at(i).mu, PHOTONS.at(i).t/T, PHOTONS.at(i).W*WSCALE, n/nx, true, STEP, PHOTONS.at(i).isBallistic);
                         
                     //update the newZ value
                     PHOTONS.at(i).W = PHOTONS.at(i).W * tempR;
@@ -335,7 +423,7 @@ void Simulation::run() {
                 }
                 
                 //Look for reflection events (front surface interaction)
-                else if ( (flags & SimFlags::FrontWall) and (newZ < 0)) {
+                else if ( ((int)flags & (int)SimFlags::FrontWall) and (newZ < 0)) {
                     //Find incremental shift, move to boundary and reflect
                     ds = -PHOTONS.at(i).x.Z/PHOTONS.at(i).mu.Z;
                     s -= ds;
@@ -343,7 +431,7 @@ void Simulation::run() {
                     PHOTONS.at(i).mu.Z = -PHOTONS.at(i).mu.Z;
                     
                     //Calculate reflection coefficient and count reflection in output
-                    tempR = OUT.reflect(PHOTONS.at(i).mu, PHOTONS.at(i).W*WSCALE, n/n0, false);
+                    tempR = OUT.reflect(PHOTONS.at(i).x/NORM, PHOTONS.at(i).mu, PHOTONS.at(i).t/T, PHOTONS.at(i).W*WSCALE, n/n0, false, STEP);
                         
                     //update the newZ value
                     PHOTONS.at(i).W = PHOTONS.at(i).W * tempR;
@@ -450,6 +538,10 @@ void Simulation::load(const string& fname) {
                 cmdstr >> T;
             else if (!key.compare("Rb"))
                 cmdstr >> Rb;
+            else if (!key.compare("Pb"))
+                cmdstr >> Pb;
+            else if (!key.compare("Sb"))
+                cmdstr >> Sb;
             else if (!key.compare("Wm"))
                 cmdstr >> Wm;
             else if (!key.compare("Wmin"))
@@ -475,32 +567,32 @@ void Simulation::load(const string& fname) {
             } else if (!key.compare("backwall")) {
                 cmdstr >> tmpbool;
                 if (tmpbool)
-                    tmpflags |= SimFlags::BackWall;
+                    tmpflags |= (int)SimFlags::BackWall;
                 else
-                    tmpflags &= ~(SimFlags::BackWall);
+                    tmpflags &= ~((int)SimFlags::BackWall);
                 flags = (SimFlags) tmpflags;
             } else if (!key.compare("frontwall")) {
                 cmdstr >> tmpbool;
                 if (tmpbool)
-                    tmpflags |= SimFlags::FrontWall;
+                    tmpflags |= (int)SimFlags::FrontWall;
                 else
-                    tmpflags &= ~(SimFlags::FrontWall);
+                    tmpflags &= ~((int)SimFlags::FrontWall);
                 flags = (SimFlags) tmpflags;
             } else if (!key.compare("cylwall")) {
                 cmdstr >> tmpbool;
                 if (tmpbool)
-                    tmpflags |= SimFlags::RadialWall;
+                    tmpflags |= (int)SimFlags::RadialWall;
                 else
-                    tmpflags &= ~(SimFlags::RadialWall);
+                    tmpflags &= ~((int)SimFlags::RadialWall);
                 flags = (SimFlags) tmpflags;
             }
-            else if (!key.compare("gaussbeam")) {
-                cmdstr >> tmpbool;
-                if (tmpbool)
-                    tmpflags |= SimFlags::GaussBeam;
-                else
-                    tmpflags &= ~(SimFlags::GaussBeam);
-                flags = (SimFlags) tmpflags;
+            else if (!key.compare("beamprofile")) {
+                cmdstr >> tmpint;
+                beamprofile = (Simulation::BeamType)tmpint;
+            }
+            else if (!key.compare("beamspread")) {
+                cmdstr >> tmpint;
+                spreadfxn = (Simulation::BeamSpread)tmpint;
             }
             //Commands to run the program
             else if (!key.compare("run"))
