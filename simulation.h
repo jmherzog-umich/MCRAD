@@ -37,10 +37,11 @@ class Simulation {
             BackWall      = 0b00000001,     //Whether there is a backwall in the simulation or semi-infinite
             FrontWall     = 0b00000010,     //Whether there is a front wall or semi-infinite
             RadialWall    = 0b00000100,     //Whether there is a cylindrical wall or infinite
+            Diffraction   = 0b00001000,     //Whether we should include diffraction in the beam spread function (NOTE: this uses the Fraunhofer solution for simplicity)
         };
         
-        //Definition for beam geometries and spread functions
-        enum struct BeamSpread { Collimated = 0, Uniform = 1, Gaussian = 2, Lambertian = 3, Isotropic = 4};
+        //Definition for beam geometries and random spreading functions
+        enum struct BeamSpread { Collimated = 0, Focused = 1, Uniform = 2, Gaussian = 3, Lambertian = 4, Isotropic = 5};
         enum struct BeamType { TopHat = 0, Gaussian = 1, TopHatEllipse = 2, GaussianEllipse = 3, TopHatAnnulus = 4, GaussianAnnulus = 5};
     
     private:
@@ -128,7 +129,7 @@ void Simulation::print() {
 
 void Simulation::genBeam() {
     //Alert the user
-    cout << "Generating incident beam photons" << endl;
+    cerr << "Generating incident beam photons" << endl;
     
     //Initialize some values
     PHOTONS = vector<Photon>(N0, Photon(vec(),vec(sin0, 0, sqrt(1-sin0*sin0)), g));
@@ -192,8 +193,6 @@ void Simulation::genBeam() {
     
     //Generate the random directions now if we have them
     for (int i = 0; i < N0; i ++) {
-        //Add to stats IC
-        OUT.initialize(PHOTONS.at(i).x/NORM, PHOTONS.at(i).W);
         //Continue if the beam is collimated
         if (spreadfxn == Simulation::BeamSpread::Collimated)
             continue;
@@ -220,7 +219,7 @@ void Simulation::genBeam() {
 
 void Simulation::genFluor() {
     //Alert the user
-    cout << "Generating fluorescence photons" << endl;
+    cerr << "Generating fluorescence photons" << endl;
     
     //Initialize some values
     PHOTONS = vector<Photon>(N0, Photon(vec(),vec(), g));
@@ -269,6 +268,11 @@ void Simulation::setup() {
     //Create output stats block
     OUT = Stats(N0, Zres, Rres, Tres, THres, momentlvl);
     
+    //Add to stats IC
+    const vec NORM(R, R, L);
+    for (unsigned int i = 0; i < PHOTONS.size(); i ++)
+        OUT.initialize(PHOTONS.at(i).x/NORM, PHOTONS.at(i).W);
+    
     //Setup random number generator
     _DIST = uniform_real_distribution<double>(0.0,1.0);
     _GEN.seed(time(0));
@@ -280,7 +284,6 @@ void Simulation::setup() {
     double Tspec = 1.0 - Rspec;
     
     //Print some settings
-    cout << endl << endl;
     cout << "==================================================================" << endl;
     cout << "Settings" << endl;
     cout << "==================================================================" << endl;
@@ -315,6 +318,7 @@ void Simulation::setup() {
     cout << "Back Wall: " << (((int)flags & (int)SimFlags::BackWall) ? "True" : "False" ) << endl;
     cout << "Front Wall: " << (((int)flags & (int)SimFlags::FrontWall) ? "True" : "False" ) << endl;
     cout << "Radial Wall: " << (((int)flags & (int)SimFlags::RadialWall) ? "True" : "False" ) << endl;
+    cout << "Beam Diffraction: " << (((int)flags & (int)SimFlags::Diffraction) ? "True" : "False" ) << endl;
     cout << "Photon packets: " << N0 << endl;
     cout << "Scattering cross-section: " << Ss << endl;
     cout << "Absorption cross-section: " << Sa << endl;
@@ -342,7 +346,6 @@ void Simulation::setup() {
     cout << endl << endl;
         
     //Fresnel coefficients
-    cout <<endl <<endl;
     cout << "Fresnel coefficients:" << endl;
     cout << "  R0  = " << Rspec << endl;
     cout << "  Rx  = " << Rx << endl;
@@ -492,11 +495,10 @@ void Simulation::run() {
     }
     
     //Report status
-    cout<<"Calculation complete in "<<STEP-1<<" steps ("<<maxstep<<" allowed)"<<endl;
+    cout<<"Calculation complete in "<<STEP-1<<" steps ("<<maxstep<<" allowed)"<<endl<<endl;
 }
 
 void Simulation::load(const string& fname) {
-
         //Allocate some memory and open the file
         string cmd, key;
         stringstream cmdstr;
@@ -584,6 +586,13 @@ void Simulation::load(const string& fname) {
                     tmpflags |= (int)SimFlags::RadialWall;
                 else
                     tmpflags &= ~((int)SimFlags::RadialWall);
+                flags = (SimFlags) tmpflags;
+            } else if (!key.compare("beamdiffraction")) {
+                cmdstr >> tmpbool;
+                if (tmpbool)
+                    tmpflags |= (int)SimFlags::Diffraction;
+                else
+                    tmpflags &= ~((int)SimFlags::Diffraction);
                 flags = (SimFlags) tmpflags;
             }
             else if (!key.compare("beamprofile")) {
