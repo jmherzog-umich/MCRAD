@@ -1,3 +1,10 @@
+#Ignore all to make sure the output binary doesn't get tagged
+*
+
+#Unignore files with extensions
+!*.*
+!*/
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
