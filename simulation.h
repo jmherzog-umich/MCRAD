@@ -1,4 +1,5 @@
 #include <sstream>
+#include <algorithm>
 #include <string>
 #include <fstream>
 #include <iostream>
@@ -20,6 +21,7 @@
 
 #define CONST_C  2.998e8
 #define CONST_PI 3.1415926535
+#define CONST_EPS 1e-6
 
 using namespace std;
 
@@ -37,21 +39,26 @@ class Simulation {
             BackWall      = 0b00000001,     //Whether there is a backwall in the simulation or semi-infinite
             FrontWall     = 0b00000010,     //Whether there is a front wall or semi-infinite
             RadialWall    = 0b00000100,     //Whether there is a cylindrical wall or infinite
-            Diffraction   = 0b00001000,     //Whether we should include diffraction in the beam spread function (NOTE: this uses the Fraunhofer solution for simplicity)
+            Interference  = 0b00001000,     //Whether we should include interference in the image calculations
+            Saturation    = 0b00010000,     //Whether we should allow saturation of absorption in the simulation
         };
         
         //Definition for beam geometries and random spreading functions
-        enum struct BeamSpread { Collimated = 0, Focused = 1, Uniform = 2, Gaussian = 3, Lambertian = 4, Isotropic = 5};
-        enum struct BeamType { TopHat = 0, Gaussian = 1, TopHatEllipse = 2, GaussianEllipse = 3, TopHatAnnulus = 4, GaussianAnnulus = 5};
+        enum struct BeamSpread { Collimated = 0, Uniform = 1, Gaussian = 2, Lambertian = 3, Isotropic = 4 };
+        enum struct BeamType { TopHat = 0, Gaussian = 1, TopHatEllipse = 2, GaussianEllipse = 3, TopHatAnnulus = 4, GaussianAnnulus = 5 };
+        enum struct BeamDuration { TopHat = 0, Gaussian = 1, Cauchy = 2 };
     
     private:
         //Incident beam
         double Ss=5e5;                  //Scattering cross-section
         double Sa=5e5;                  //absorption cross-section
         double g=0.98;                  //Scattering anisotropy
+        double w=5.5e5;                 //Angular frequency in GHz (5.5e5 ~ 545 nm light)
+        double E = 1;                   //Total number of photons (not packets, but quanta of light)
         double n0=1.600;                //Refractive index of front surface (glass)
         double n=1.330;                 //Refractive index of medium (water)
         double nx=1.600;                //Refractive index of back surface (glass)
+        double nr=1.600;                //Refractive index of outer radial surface (glass)
         double sin0=0.0;                //Incident sin(theta) = 0 for normal incidence (-1 to 1)
         double FQY=1;                   //Fluorescence quantum yield
         
@@ -66,11 +73,14 @@ class Simulation {
         SimFlags flags = (Simulation::SimFlags)3;
         BeamType beamprofile = Simulation::BeamType::TopHat;
         BeamSpread spreadfxn = Simulation::BeamSpread::Collimated;
+        BeamDuration beamdur = Simulation::BeamDuration::TopHat;
         
         //Beam parameters
         double Rb=5e5;          //Beam radius [nm]
         double Pb=0;            //Beam spread parameter: standard deviation (gauss)/width (uniform)
         double Sb=2.5e5;        //Beam profile parameter: linewidth (TopHatEllipse, Guass1D), Inner radius (TopHatAnnulus, GaussianAnnulus)
+        double Zb = 0;          //Focus location of beam (0 for infinity/unfocused)
+        double Tb = 0;          //Laser pulse duration
         
         //Convergence and other settings
         double Wmin = 1e-10;    //Start terminating packets if they get this small
@@ -99,13 +109,14 @@ class Simulation {
 
 Simulation::Simulation() {
     Ss=5e5; Sa=5e5; g=0.98; n0=1.600; n=1.330; nx=1.600; sin0=0.0; FQY=1; 
-    N0 = 5e6; dens=1e-13; L=1e7; R=1e7; T=300; 
-    Rb=5e5;
+    N0 = 5e6; dens=1e-13; L=1e7; R=1e7; T=300; nr=1.600;
+    Rb=5e5; E = 1e10; w=5.5e5; Zb = 0; Tb = 0;
     Wmin = 1e-10; Wm = 0.1; maxstep = 5e6; 
     Zres = 100; Rres = 100; Tres = 1; THres = 50; momentlvl = 4;
-    flags = (Simulation::SimFlags)3;
+    flags = (Simulation::SimFlags)7;
     spreadfxn = Simulation::BeamSpread::Collimated;
     beamprofile = Simulation::BeamType::TopHat;
+    beamdur = Simulation::BeamDuration::TopHat;
 }
 
 template<class T>
@@ -142,8 +153,13 @@ void Simulation::genBeam() {
     
     //Loop through and generate beam if needed
     double x,y;
-    if (Rb > 1) {
-        for (int i = 0; i < N0; i ++) {
+    double Xf = Zb*tan(asin(sin0));
+    for (int i = 0; i < N0; i ++) {
+        
+        ///
+        //  Calculate beam profile
+        ///
+        if (Rb > 1) {        
             //Random numbers
             eps2 = roll();
             eps = roll();
@@ -179,9 +195,14 @@ void Simulation::genBeam() {
                     break;
                     
                 case Simulation::BeamType::GaussianAnnulus :
-                    x = Rb + Sb * erfinvf((float)eps);
+                    x = Rb + (Sb - Rb) * erfinvf((float)eps);
                     y = x * sin(2.0 * CONST_PI * eps2);
                     x = x * cos(2.0 * CONST_PI * eps2);
+                    break;
+                    
+                default:
+                    x = 0;
+                    y = 0;
                     break;
             }
             
@@ -189,19 +210,49 @@ void Simulation::genBeam() {
             PHOTONS.at(i).x.X += x;
             PHOTONS.at(i).x.Y += y;
         }
-    }
+        
+        ///
+        //  Calculate photon packet time
+        ///
+        if (Tb > 0) {
+            eps = roll();
+            switch (beamdur) {
+                case Simulation::BeamDuration::TopHat :
+                    PHOTONS.at(i).t = eps * Tb;
+                    break;
+                case Simulation::BeamDuration::Gaussian :
+                    PHOTONS.at(i).t = erfinvf((float)eps);
+                    break;
+                    
+                case Simulation::BeamDuration::Cauchy :
+                    PHOTONS.at(i).t = -Tb / tan(CONST_PI * eps);
+                    break;
+            }
+        }
+        
+        ///
+        //  Update directions
+        ///
+        //Focus the beam
+        if (Zb > 0) {
+            PHOTONS.at(i).mu = vec(Xf, 0, Zb) - PHOTONS.at(i).x;
+            PHOTONS.at(i).mu /= PHOTONS.at(i).mu.norm();
+        }
     
-    //Generate the random directions now if we have them
-    for (int i = 0; i < N0; i ++) {
-        //Continue if the beam is collimated
+        //Implement diffraction here?
+        ///
+        // TODO: DIFFRACTION CALCULATION
+        ///
+    
+        //Exit now if we aren't further spreading the beam
         if (spreadfxn == Simulation::BeamSpread::Collimated)
             continue;
-    
-        //Random numbers
+            
+        //Roll new random numbers
         eps2 = roll()*2*CONST_PI; //Azimuthal angle
         eps = roll();
         
-        //Sample distributions
+        //Sample distributions for dispersion on top of focus
         switch (spreadfxn) {
             case Simulation::BeamSpread::Collimated :
                 break;
@@ -214,7 +265,7 @@ void Simulation::genBeam() {
             case Simulation::BeamSpread::Isotropic :
                 break;
         }
-    }
+    }   
 }
 
 void Simulation::genFluor() {
@@ -267,11 +318,13 @@ void Simulation::genFluor() {
 void Simulation::setup() {
     //Create output stats block
     OUT = Stats(N0, Zres, Rres, Tres, THres, momentlvl);
+    OUT.saturate = (int)flags&(int)SimFlags::Saturation;
+    OUT.interfere = (int)flags&(int)SimFlags::Interference;
     
     //Add to stats IC
     const vec NORM(R, R, L);
     for (unsigned int i = 0; i < PHOTONS.size(); i ++)
-        OUT.initialize(PHOTONS.at(i).x/NORM, PHOTONS.at(i).W);
+        OUT.initialize(PHOTONS.at(i), NORM);
     
     //Setup random number generator
     _DIST = uniform_real_distribution<double>(0.0,1.0);
@@ -314,29 +367,37 @@ void Simulation::setup() {
         default: cout << "Other" << endl; break;
     }
     
+    cout << "Beam temporal profile: ";
+    switch (beamdur) {
+        case Simulation::BeamDuration::TopHat : cout << "TopHat (" << Tb << " ns)" << endl; break;
+        case Simulation::BeamDuration::Gaussian : cout << "Gaussian (sigma = " << Tb << ")" << endl; break;
+        case Simulation::BeamDuration::Cauchy : cout << "Gaussian (gamma = " << Tb << ")" << endl; break;
+        default: cout << "Other" << endl; break;
+    }
+    
     cout << "g: " << g << endl;
+    cout << "Focus at depth: " << ((Zb > 0) ? Zb : INFINITY) << endl;
     cout << "Back Wall: " << (((int)flags & (int)SimFlags::BackWall) ? "True" : "False" ) << endl;
     cout << "Front Wall: " << (((int)flags & (int)SimFlags::FrontWall) ? "True" : "False" ) << endl;
     cout << "Radial Wall: " << (((int)flags & (int)SimFlags::RadialWall) ? "True" : "False" ) << endl;
-    cout << "Beam Diffraction: " << (((int)flags & (int)SimFlags::Diffraction) ? "True" : "False" ) << endl;
+    cout << "Packet interference: " << (((int)flags & (int)SimFlags::Interference) ? "True" : "False" ) << endl;
+    cout << "Time-dependent: " << ((T > 0) ? true : false) << endl;
+    cout << "Saturation: " << (((int)flags & (int)SimFlags::Saturation) ? "True" : "False" ) << endl;
     cout << "Photon packets: " << N0 << endl;
     cout << "Scattering cross-section: " << Ss << endl;
     cout << "Absorption cross-section: " << Sa << endl;
     cout << "Front Refractive Index: " << n0 << endl;
     cout << "Medium Refractive Index: " << n << endl;
     cout << "Back Refractive Index: " << nx << endl;
+    cout << "Side Refractive Index: " << nr << endl;
     cout << "Incident sin(theta): " << sin0 << endl;
     cout << "Albedo: " << Ss/(Ss+Sa) << endl;
     cout << "Theoretical Max Step Count: " << ceil(log(Wmin)/log(Ss/(Ss+Sa)) + 1.0/Wm) << endl;
     cout << endl << endl;
     
-    //Warn the user
-    cout << "==================================================================" << endl;
-    cout << "Starting simulation" << endl;
-    cout << "==================================================================" << endl;
-    
     //Define output arrays
-    cout << "Simulation size: " << R << " x " << L << endl;
+    cout << "Simulation Domain (R,Z,T): " << R << ", " << L << ", " << T << endl;
+    cout << "Grid points (nR,nZ,nT): " << Rres << ", " << Zres << ", " << Tres << endl;
     cout << endl << "Z: ";
     for (int i = 0; i < OUT.Zres; i ++)
         cout << scientific << setw(14) << OUT.dZ * i * L;
@@ -350,10 +411,19 @@ void Simulation::setup() {
     cout << "  R0  = " << Rspec << endl;
     cout << "  Rx  = " << Rx << endl;
     cout << "  T0  = " << Tspec << endl;
-        
+    
     //Print MFPs
     cout << "Scattering mean free path: " << 1.0/Ss/dens << "nm" << endl;
     cout << "Absorption mean free path: " << 1.0/Sa/dens << "nm" << endl;
+    
+    //Warn the user
+    cout << "==================================================================" << endl;
+    cout << "Starting simulation" << endl;
+    cout << "==================================================================" << endl;
+    
+    //Sort the photons if we're time dependent
+    if (T > 0)
+        sort(begin(PHOTONS), end(PHOTONS));
 }
 
 void Simulation::run() {
@@ -362,15 +432,27 @@ void Simulation::run() {
     auto t0 = chrono::system_clock::now();
     auto t1 = chrono::system_clock::now();
     auto t2 = chrono::system_clock::now();
+    double tsim = 0;
     std::chrono::duration<double> ELAPSED;
     time_t STARTTIME = chrono::system_clock::to_time_t(t0);
     string STARTTIMESTR(ctime(&STARTTIME));
     STARTTIMESTR = STARTTIMESTR.erase(STARTTIMESTR.back());
     
     //Initialize a whole lot of temporary variables
-    double eps, s, ds, mu, newZ, dt, newW, tempR, oldW;
-    bool done = false, donestep = false;
+    double eps, s, ds, ds2, ka, ka0, ks, k, tempR, Fabs, xf, m;
+    bool done = false;
+    int reflect;
     const vec NORM(R, R, L);
+    vec x, u;
+    
+    //Scattering/absorption coefficients
+    ks = Ss*dens;
+    ka0 = Sa*dens;
+    ka = ka0;
+    k = ka + ks;
+    
+    //Some default values just in case
+    m = 1;
     
     //loop through steps
     unsigned int STEP = 0; 
@@ -378,85 +460,150 @@ void Simulation::run() {
         
         //Prepare for loop
         done = false;
-        mu = (Sa+Ss)*dens;
         
         //Loop through each photon and update (go forward to delete if needed)
         for (unsigned int i = 0; true; i ++) {   //Don't check vector size cause it will change
         
             //Check that it's a good vector
-            if (i >= PHOTONS.size())                                   //Exit if we've covered the whole vector
+            if (i >= PHOTONS.size())             //Exit if we've covered the whole vector
                 break;
-            while (PHOTONS.at(i).W <= Wmin) {                          //Loop until W!=0
-                if (i < PHOTONS.size()-1) {                            //If not end...
-                    remove(PHOTONS, i);                                // delete and continue
-                } else {                                                //Otherwise
+            while (PHOTONS.at(i).W <= Wmin) {    //Loop until W!=0
+                if (i < PHOTONS.size()-1) {      //If not end...
+                    remove(PHOTONS, i);          // delete and continue
+                } else {                         //Otherwise
                     if (i == 0)
-                        PHOTONS.clear();                               // If i==0 and we can't remove any more, then we're at the end
-                    done = true;                                        // propagate "we're done" downstream
-                    break;                                              // stop looking for photons
+                        PHOTONS.clear();         // If i==0 and we can't remove any more, then we're at the end
+                    done = true;                 // propagate "we're done" downstream
+                    break;                       // stop looking for photons
                 }
             }
             if (done)
-                break;                              // and stop simulation
+                break;                           // and stop simulation
         
             //Roll the dice
             eps = roll();
+            s = -log(eps);
             
-            //Calculate new displacement then time
-            s = -log(eps)/mu; dt = s/CONST_C*n;
-            
-            //Check for boundary collision - only Z-direction for simplicity
-            newZ = s*PHOTONS.at(i).mu.Z + PHOTONS.at(i).x.Z;
-            donestep = false;
-            while (!donestep) {
-                //Look for transmission events (hitting back surface)
-                if ( ((int)flags & (int)SimFlags::BackWall) and (newZ>L)) {
-                    //Find incremental shift, move to boundary and reflect
-                    ds = (L-PHOTONS.at(i).x.Z)/PHOTONS.at(i).mu.Z;
-                    s -= ds;
-                    PHOTONS.at(i).x = PHOTONS.at(i).mu * ds;
-                    PHOTONS.at(i).mu.Z = -PHOTONS.at(i).mu.Z;
+            //Check for boundary collision and cell collisions
+            while (s > CONST_EPS) {
+                //Get the local k and calculate the expected displacement
+                if ((int)flags & (int)SimFlags::Saturation) {
+                    Fabs = OUT.E(PHOTONS.at(i).x / NORM) / dens *E/N0;
+                    if (Fabs > 0)
+                        ka = ka0 / Fabs * (1.0 - exp(-Fabs));
+                    else
+                        ka = ka0;
+                }
+                k = ka + ks;
                     
-                    //Calculate reflection coefficient and count reflection in output
-                    tempR = OUT.reflect(PHOTONS.at(i).x/NORM, PHOTONS.at(i).mu, PHOTONS.at(i).t/T, PHOTONS.at(i).W*WSCALE, n/nx, true, STEP, PHOTONS.at(i).isBallistic);
-                        
-                    //update the newZ value
-                    PHOTONS.at(i).W = PHOTONS.at(i).W * tempR;
-                    newZ = s*PHOTONS.at(i).mu.Z + PHOTONS.at(i).x.Z;
+                //Calculate the distance to the next interface (step through
+                // possible one and keep the shortest distance)
+                //-If no obstruction, we just pass freely the whole distance (reflect = 0)
+                ds = s; ds2 = s; reflect = 0;
+                    
+                //-Calculate distances to adjacent points (but increment by 
+                // EPS to ensure that the new position will resolve to the
+                // correct cell.
+                if ((int)flags & (int)SimFlags::Saturation) {
+                    
+                    //Check next z-shell if abs(mu.Z > 0)
+                    xf = PHOTONS.at(i).x.Z / (L/Zres);
+                    if ( PHOTONS.at(i).mu.Z > 0 )
+                        ds2 = ((ceil(xf)-xf) * (L/Zres) / PHOTONS.at(i).mu.Z) * k;
+                    else if (PHOTONS.at(i).mu.Z < 0)
+                        ds2 = (-(xf-floor(xf)) * (L/Zres) / PHOTONS.at(i).mu.Z) * k;
+                    if (ds2 < ds and ds2 > 0)
+                        ds = ds2;
+ 
+                    //Check radial shell
+                    xf = ceil(PHOTONS.at(i).x.r() / (R/Rres));
+                    ds2 = PHOTONS.at(i).intersectR(xf) * k;
+                    if (ds2 < ds and ds2 > 0)
+                        ds = ds2;
+                    if (xf > 0) {
+                        ds2 = PHOTONS.at(i).intersectR(xf-R/Rres) * k;
+                        if (ds2 < ds and ds2 > 0)
+                            ds = ds2;
+                    }
                 }
                 
-                //Look for reflection events (front surface interaction)
-                else if ( ((int)flags & (int)SimFlags::FrontWall) and (newZ < 0)) {
-                    //Find incremental shift, move to boundary and reflect
-                    ds = -PHOTONS.at(i).x.Z/PHOTONS.at(i).mu.Z;
-                    s -= ds;
-                    PHOTONS.at(i).x = PHOTONS.at(i).x + PHOTONS.at(i).mu * ds;
-                    PHOTONS.at(i).mu.Z = -PHOTONS.at(i).mu.Z;
-                    
-                    //Calculate reflection coefficient and count reflection in output
-                    tempR = OUT.reflect(PHOTONS.at(i).x/NORM, PHOTONS.at(i).mu, PHOTONS.at(i).t/T, PHOTONS.at(i).W*WSCALE, n/n0, false, STEP);
-                        
-                    //update the newZ value
-                    PHOTONS.at(i).W = PHOTONS.at(i).W * tempR;
-                    newZ = s*PHOTONS.at(i).mu.Z + PHOTONS.at(i).x.Z;
+                //-Calculate distance to back wall
+                if ( ((int)flags & (int)SimFlags::BackWall) and (PHOTONS.at(i).mu.Z > 0)) {
+                    //If the back wall is closer than the current ds value
+                    ds2 = (L - PHOTONS.at(i).x.Z)/PHOTONS.at(i).mu.Z * k;
+                    if (ds2 <= ds and ds2 >= 0) {
+                        ds = ds2;
+                        reflect = 1;
+                    }
                 }
                 
-                //No walls or we haven't hit a wall, so continue
-                else
-                    donestep = true;
+                //-Calculate distance to front wall
+                if ( ((int)flags & (int)SimFlags::FrontWall) and (PHOTONS.at(i).mu.Z < 0)) {
+                    //If the front wall is closer than the current ds value
+                    ds2 = -PHOTONS.at(i).x.Z/PHOTONS.at(i).mu.Z * k;
+                    if (ds2 <= ds and ds2 >= 0) {
+                        ds = ds2;
+                        reflect = 2;
+                    }
+                }
+                
+                //-Calculate distance to radial wall
+                if ((int)flags & (int)SimFlags::RadialWall) {
+                    ds2 = PHOTONS.at(i).intersectR(R) * k;
+                    if (ds2 <= ds and ds2 >= 0) {
+                        ds = ds2;
+                        reflect = 3;
+                    }
+                }
+                
+                //Move photon as necessary and update the incremental shift
+                s -= ds;
+                PHOTONS.at(i).x += PHOTONS.at(i).mu * ds / k;
+                PHOTONS.at(i).t += ds / k / CONST_C * n;
+                
+                //Look for transmission events (hitting back surface) from the current cell
+                if ( reflect == 1 ) {
+                    //Set new direction and m value
+                    PHOTONS.at(i).mu.Z = -PHOTONS.at(i).mu.Z;
+                    PHOTONS.at(i).x.Z = L-CONST_EPS;
+                    m = n / nx;
+                }
+                
+                //Look for reflection events (front surface interaction) from the current cell
+                else if ( reflect == 2 ) {
+                    //Set new direction and m value
+                    PHOTONS.at(i).mu.Z = -PHOTONS.at(i).mu.Z;
+                    PHOTONS.at(i).x.Z = CONST_EPS;
+                    m = n / n0;
+                }
+                
+                //Check for reflections from radial wall
+                else if ( reflect == 3) {
+                    //Set new direction
+                    u = PHOTONS.at(i).x; u.Z = 0; u = -u / u.norm();
+                    PHOTONS.at(i).mu = PHOTONS.at(i).mu - u * u.dot(PHOTONS.at(i).mu) * 2;
+                    
+                    //Get new m value
+                    m = n / nr;
+                    
+                    //Make sure we go just below r = R
+                    tempR = R / PHOTONS.at(i).x.r();
+                    PHOTONS.at(i).x.X *= tempR * (1 - CONST_EPS);
+                    PHOTONS.at(i).x.Y *= tempR * (1 - CONST_EPS);
+                }
+                
+                //And implement the reflections
+                if (reflect) {
+                    tempR = OUT.reflect(PHOTONS.at(i), NORM, T, WSCALE, m, reflect, STEP);
+                    PHOTONS.at(i).W = PHOTONS.at(i).W * tempR;
+                    if (m < 1)
+                        PHOTONS.at(i).flipPhase = !PHOTONS.at(i).flipPhase;
+                }
             }
             
-            //Normal position update, absorption and scattering
-            oldW = PHOTONS.at(i).W;
-            newW = oldW * Sa/(Sa+Ss);
-            PHOTONS.at(i).x = PHOTONS.at(i).x + PHOTONS.at(i).mu * s;
-            PHOTONS.at(i).W -= newW;
-            PHOTONS.at(i).t += dt;
-            
-            //Account for absorbed photons
-            OUT.scatter(PHOTONS.at(i).x/NORM, PHOTONS.at(i).t/T, oldW*WSCALE, newW*WSCALE);
-                        
-            //Set new direction
+            //Calculate new photon info and store scattering event
+            OUT.scatter(PHOTONS.at(i), NORM, T, WSCALE, ka/k);
+            PHOTONS.at(i).W -= PHOTONS.at(i).W * ka/k;
             PHOTONS.at(i).Scatter(roll(), roll());
             
             //Terminate old packets
@@ -496,6 +643,7 @@ void Simulation::run() {
     
     //Report status
     cout<<"Calculation complete in "<<STEP-1<<" steps ("<<maxstep<<" allowed)"<<endl<<endl;
+    OUT.finalize();
 }
 
 void Simulation::load(const string& fname) {
@@ -526,6 +674,10 @@ void Simulation::load(const string& fname) {
                 cmdstr >> n;
             else if (!key.compare("nx"))
                 cmdstr >> nx;
+            else if (!key.compare("nr"))
+                cmdstr >> nr;
+            else if (!key.compare("E"))
+                cmdstr >> E;
             else if (!key.compare("sin0"))
                 cmdstr >> sin0;
             else if (!key.compare("N0"))
@@ -544,6 +696,10 @@ void Simulation::load(const string& fname) {
                 cmdstr >> Pb;
             else if (!key.compare("Sb"))
                 cmdstr >> Sb;
+            else if (!key.compare("Zb"))
+                cmdstr >> Zb;
+            else if (!key.compare("Tb"))
+                cmdstr >> Tb;
             else if (!key.compare("Wm"))
                 cmdstr >> Wm;
             else if (!key.compare("Wmin"))
@@ -590,18 +746,26 @@ void Simulation::load(const string& fname) {
             } else if (!key.compare("beamdiffraction")) {
                 cmdstr >> tmpbool;
                 if (tmpbool)
-                    tmpflags |= (int)SimFlags::Diffraction;
+                    tmpflags |= (int)SimFlags::Interference;
                 else
-                    tmpflags &= ~((int)SimFlags::Diffraction);
+                    tmpflags &= ~((int)SimFlags::Interference);
                 flags = (SimFlags) tmpflags;
-            }
-            else if (!key.compare("beamprofile")) {
+            } else if (!key.compare("saturation")) {
+                cmdstr >> tmpbool;
+                if (tmpbool)
+                    tmpflags |= (int)SimFlags::Saturation;
+                else
+                    tmpflags &= ~((int)SimFlags::Saturation);
+                flags = (SimFlags) tmpflags;
+            } else if (!key.compare("beamprofile")) {
                 cmdstr >> tmpint;
                 beamprofile = (Simulation::BeamType)tmpint;
-            }
-            else if (!key.compare("beamspread")) {
+            } else if (!key.compare("beamspread")) {
                 cmdstr >> tmpint;
                 spreadfxn = (Simulation::BeamSpread)tmpint;
+            } else if (!key.compare("beamwidth")) {
+                cmdstr >> tmpint;
+                beamdur = (Simulation::BeamDuration)tmpint;
             }
             //Commands to run the program
             else if (!key.compare("run"))

@@ -2,6 +2,7 @@
 #include "vec.h"
 
 #define CONST_PI 3.1415926535
+#define CONST_EPS 1e-6
 
 #ifndef _PHOTON_H_
 #define _PHOTON_H_
@@ -15,7 +16,7 @@ double p_henyeyGreenstein(double g, const vec& mu1, const vec& mu2) {
     return 0.5 * (1-g*g)/pow(1 + g*g - 2*g* mu1.dot(mu2), 1.5);
 }
 double cos_henyeyGreenstein(double g, double eps) {
-    if (abs(g)>1e-5)
+    if (abs(g)>CONST_EPS)
         return (1+g*g-pow((1.0-g*g)/(1-g+2.0*g*eps), 2))/2.0/g;
     else
         return 1-2*eps;
@@ -48,7 +49,10 @@ struct Photon {
         double W;  //Weight remaining
         double t;  //Total elapsed lifetime
         double g;  //Average scattering cos(a)
+        double f;  //Angular frequency (GHz)
+        double S;  //Distance left to travel
         bool isBallistic;   //Has the photon scattered yet?
+        bool flipPhase;
         
         static PhaseFunction phase;  //Phase function to use for calculation
         
@@ -57,7 +61,7 @@ struct Photon {
         Photon() {
             x.X = 0; x.Y = 0; x.Z = 0;
             mu.X = 0; mu.Y = 0; mu.Z = 1;
-            W = 1; t = 0; g = 0;
+            W = 1; t = 0; g = 0; f = 0;
             isBallistic = true;
             phase = PhaseFunction::HenyeyGreenstein;
         };
@@ -79,16 +83,19 @@ struct Photon {
                 case PhaseFunction::Rayleigh:
                     cost = cos_rayleigh(eps1);
                     break;
+                default:
+                    cost = 0;
+                    break;
             }
             double sint = sqrt(1.0-cost*cost);
             
             //If we're moving very close to +/- Z, the solution simplifies
             double newX, newY, newZ;
-            if (abs(mu.Z-1.0) < 1e-6) { //Z=1
+            if (abs(mu.Z-1.0) < CONST_EPS) { //Z=1
                 newZ = -cost;
                 newX = sint*cos(eps2*2.0*CONST_PI);
                 newY = sint*sin(eps2*2.0*CONST_PI);
-            } else if (abs(mu.Z+1.0) < 1e-6) { //Z=-1
+            } else if (abs(mu.Z+1.0) < CONST_EPS) { //Z=-1
                 newX = sint*cos(eps2*2.0*CONST_PI);
                 newY = sint*sin(eps2*2.0*CONST_PI);
                 newZ = cost;
@@ -104,6 +111,44 @@ struct Photon {
             };
             mu = vec(newX, newY, newZ);
             isBallistic = false;
+        }
+        
+        double phi() const {
+            return cos(f * t) * (flipPhase ? -1 : 1);
+        }
+        
+        //Math functions
+        double muR() const {
+            vec xx = x;
+            xx.Z = 0;
+            return mu.dot(xx / xx.norm());
+        }
+        
+        double intersectR(double R) const {
+            //Some edge cases
+            if (abs(mu.r2()) < CONST_EPS)
+                return -1;
+        
+            //Some preliminary variables
+            double a = mu.X*mu.X + mu.Y*mu.Y;
+            double b = (mu.X*x.X + mu.Y*x.Y)/a;
+            double c = x.r2() - R*R;
+            if (c/a > b*b)
+                return -1;
+                    
+            //Calculate the roots
+            double r1 = sqrt(b*b - c/a) - b;
+            double r2 = -sqrt(b*b - c/a) - b;
+            
+            //Return the right root
+            if (r2 > 0)
+                return r2;
+            else
+                return r1;
+        }
+        
+        bool operator<(const Photon& rhs) const {
+            return this->t < rhs.t;
         }
 };
 

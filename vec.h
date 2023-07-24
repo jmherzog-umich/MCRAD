@@ -27,6 +27,9 @@ struct vec {
         vec operator-(const vec& rhs) const {
             return vec(this->X-rhs.X, this->Y-rhs.Y, this->Z-rhs.Z);
         };
+        vec operator-() const {
+            return vec(-X, -Y, -Z);
+        };
         void operator=(const vec& rhs) {
             this->X = rhs.X;
             this->Y = rhs.Y;
@@ -35,9 +38,34 @@ struct vec {
         vec operator*(double a) const {
             return vec(this->X*a, this->Y*a, this->Z*a);
         }
+        vec operator/(double a) const {
+            return vec(this->X/a, this->Y/a, this->Z/a);
+        }  
         vec operator/(const vec& rhs) const {
             return vec(this->X/rhs.X, this->Y/rhs.Y, this->Z/rhs.Z);
         }        
+		
+		//Other operators
+		void operator+=(const vec& rhs) {
+            this->X += rhs.X;
+            this->Y += rhs.Y;
+            this->Z += rhs.Z;
+        };
+        void operator-=(const vec& rhs) {
+            this->X -= rhs.X;
+            this->Y -= rhs.Y;
+            this->Z -= rhs.Z;
+        };
+        void operator/=(double r) {
+            this->X /= r;
+            this->Y /= r;
+            this->Z /= r;
+        };
+        void operator*=(double r) {
+            this->X *= r;
+            this->Y *= r;
+            this->Z *= r;
+        };
 		
 		double dot(const vec& rhs) const {
 			return this->X * rhs.X + this->Y * rhs.Y + this->Z * rhs.Z;
@@ -49,6 +77,9 @@ struct vec {
         };
         double r() const {
             return sqrt(X*X + Y*Y);
+        };
+        double r2() const {
+            return X*X + Y*Y;
         };
 };
 

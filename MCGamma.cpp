@@ -19,7 +19,6 @@ using namespace std;
 //  Performs steady state Monte Carlo simulation of (non-interacting) photons
 //  including scattering, energy deposition, fluorescence emission, etc.
 //     Units - nm, nm2, nm3, ns
-//     Use ion density and convert particle scattering cross-section to per ion basis
 ///
 int main(int argc, char** argv) {
     
@@ -32,8 +31,8 @@ int main(int argc, char** argv) {
         I.load(argv[1]);
     } else {
         //Run simulation
-        I.setup();
         I.genBeam();
+        I.setup();
         I.run();
         I.print();
     }
