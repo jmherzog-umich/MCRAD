@@ -12,6 +12,7 @@
 #include "photon.h"
 #include "stats.h"
 #include "simulation.h"
+#include "utility.h"
 
 using namespace std;
 
@@ -21,6 +22,10 @@ using namespace std;
 //     Units - nm, nm2, nm3, ns
 ///
 int main(int argc, char** argv) {
+    
+    //Initialize random number generator and some other things
+    rand_init();
+    cout.precision(10);
     
     //Create a simulation
     Simulation I;
@@ -36,5 +41,4 @@ int main(int argc, char** argv) {
         I.run();
         I.print();
     }
-
 };
