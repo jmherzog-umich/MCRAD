@@ -5,10 +5,10 @@ Rres 20
 Zres 20
 THres 20
 Tres 20
-dens 5e-4
+dens 0.5
 R 10000
 L 1000
-dT 10
+dT 0.1
 Rb 500
 phase 0
 backwall 1
@@ -16,6 +16,7 @@ frontwall 1
 sidewall 1
 cartesian 1
 beamprofile 1
+pathbasefilename raypath_film
 genBeam
 setup
 run
