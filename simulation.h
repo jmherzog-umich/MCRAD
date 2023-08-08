@@ -19,6 +19,7 @@
 #include "grid.h"
 #include "image.h"
 #include "camera.h"
+#include "raypath.h"
 
 #ifndef _SIMINFO_H_
 #define _SIMINFO_H_
@@ -85,9 +86,11 @@ class Simulation {
         int THres = 10;
         int momentlvl = 4;
         int printSteps = 0;
+        unsigned long int storepaths = 50;
         
         //Calculated values
         vector<Photon> PHOTONS;
+        vector<RayPath> PATHS;
         double tsim;
 };
 
@@ -106,7 +109,7 @@ Simulation::Simulation() {
     imgT = Image(10,10,2*beam.Rb/5, ((int)flags & (int)SimFlags::Interference));
     cam = Camera(5, 1000, -1, 1.2, 50000, vec(100000,0,5000), vec(-1,0,0));
     printSteps = 0;
-    tsim = 0;
+    tsim = 0; storepaths = 50;
 }
 
 template<class T>
@@ -117,6 +120,16 @@ void remove(vector<T>& v, unsigned int i) {
 }
 
 void Simulation::print() {
+    //Store path data
+    if (storepaths) {
+        cerr << "Writing xyz file" << endl;
+        ofstream FILE(RayPath::ofbasename + ".xyz");
+        for (unsigned long int j = 0; j < storepaths; j ++)
+            PATHS.at(j).print(FILE);
+        FILE.close();
+    }
+    
+    //Write output file
     cout << "==================================================================" << endl;
     cout << "Transmitted and reflected beams" << endl;
     cout << "==================================================================" << endl;
@@ -172,6 +185,9 @@ void Simulation::setup() {
     imgR.clear();
     cam.setup();
     
+    //Initialize PATHS
+    PATHS = vector<RayPath>(storepaths);
+    
     //Add to stats IC
     double R;
     for (unsigned int i = 0; i < PHOTONS.size(); i ++) {
@@ -182,6 +198,10 @@ void Simulation::setup() {
         R = stats.initialize(PHOTONS.at(i), n0/medium.n(PHOTONS.at(i).v));
         PHOTONS.at(i).W *= (1-R);
         PHOTONS.at(i).S = -log(roll());
+        
+        //Generate raypath objects if needed
+        if (i < storepaths)
+            PHOTONS.at(i).storeRayPath(PATHS.at(i));
     }
     
     //Fresnel coefficients
@@ -209,10 +229,13 @@ void Simulation::setup() {
     cout << "Front Refractive Index: " << n0 << endl;
     cout << "Back Refractive Index: " << nx << endl;
     cout << "Side Refractive Index: " << nr << endl;
+    if (storepaths)
+        cout << "Storing " << storepaths << " ray paths to file: " << RayPath::ofbasename << ".xyz" << endl;
     cout << "Theoretical Max (Static) Step Count: " << ceil(log(Wmin)/log(medium.albedo())) + 1.0/Wm << endl;
     if (dT > 0)
         cout << "Theoretical Max (Dynamic) Step Count: " << ceil((ceil(log(Wmin)/log(medium.albedo())) + 1.0/Wm) / medium.we() / stats.dT) << endl;
     cout << endl;
+    
     
     //Print medium settings
     medium.print();
@@ -247,9 +270,10 @@ void Simulation::setup() {
     
     //Sort the photons if we're time dependent
     if (dT > 0) {
-        cerr << "Sorting photon vector..." << endl;
+        cerr << "Sorting photon vector...";
         sort(begin(PHOTONS), end(PHOTONS));
         tsim = PHOTONS.at(0).t + dT;
+        cerr << " Done!" << endl;
     }
 }
 
@@ -300,9 +324,9 @@ void Simulation::run() {
             if ((dT>0) and (PHOTONS.at(i).t >= tsim))       //If time-dependent, and tsim is earlier than photon time, skip to next iteration (photons are sorted)
                 break;                           //
             while (PHOTONS.at(i).W <= Emin) {    //Loop until W!=0
-                if (i < PHOTONS.size()-1) {      //If not end...
-                    remove(PHOTONS, i);          // delete and continue
-                } else {                         //Otherwise
+                if (i < PHOTONS.size()-1)        //If not end, delete and continue
+                    remove(PHOTONS, i);          //Swap with back and remove if we have enough elements to not screw up the path
+                else {                           //Otherwise
                     if (i == 0)
                         PHOTONS.clear();         // If i==0 and we can't remove any more, then we're at the end
                     done = true;                 // propagate "we're done" downstream
@@ -470,9 +494,6 @@ void Simulation::run() {
                     m = n / nr;
                 }
                 
-                if ((PHOTONS.at(i).x.Z < 0) or (PHOTONS.at(i).x.Z > L) or (abs(PHOTONS.at(i).x.X) > R) or (abs(PHOTONS.at(i).x.Y) > R))
-                    cerr << "WTF!?!" << endl;
-                
                 //And implement the reflections
                 if (reflect) {
                     //Calculate reflection coefficient and sint
@@ -489,6 +510,7 @@ void Simulation::run() {
                             
                             //Reflect the packet
                             PHOTONS.at(i).mu = u;
+                            PHOTONS.at(i).Reflect();
                             
                         } else { //Transmit
                             //Increment images
@@ -530,6 +552,7 @@ void Simulation::run() {
                             
                         //And reflect the remainder of the photon packet
                         PHOTONS.at(i).mu = u;
+                        PHOTONS.at(i).Reflect();
                     }
                 }
                 
@@ -660,6 +683,10 @@ void Simulation::load(const string& fname) {
                 cmdstr >> maxstep;
             else if (!key.compare("printsteps"))
                 cmdstr >> printSteps;
+            else if (!key.compare("exportpaths"))
+                cmdstr >> storepaths;
+            else if (!key.compare("pathbasefilename"))
+                cmdstr >> RayPath::ofbasename;
             else if (!key.compare("Zres"))
                 cmdstr >> Zres;
             else if (!key.compare("Rres"))
@@ -690,7 +717,7 @@ void Simulation::load(const string& fname) {
                 else
                     tmpflags &= ~((int)SimFlags::FrontWall);
                 flags = (SimFlags) tmpflags;
-            } else if (!key.compare("cylwall")) {
+            } else if (!key.compare("sidewall")) {
                 cmdstr >> tmpbool;
                 if (tmpbool)
                     tmpflags |= (int)SimFlags::RadialWall;

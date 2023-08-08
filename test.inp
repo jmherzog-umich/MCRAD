@@ -1,16 +1,21 @@
-Ss 1e6
-Sa 1e4
-N0 1000000
+Ss 1
+Sa 0.01
+N0 5000000
 Rres 20
 Zres 20
 THres 20
-dens 5e-13
-R 100000
-Rb 50000
+Tres 20
+dens 5e-4
+R 10000
+L 1000
+dT 10
+Rb 500
 phase 0
 backwall 1
 frontwall 1
-gaussbeam 0
+sidewall 1
+cartesian 1
+beamprofile 1
 genBeam
 setup
 run

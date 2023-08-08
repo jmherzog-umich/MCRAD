@@ -3,6 +3,7 @@
 #include "vec.h"
 #include "medium.h"
 #include "utility.h"
+#include "raypath.h"
 
 #define CONST_PI 3.1415926535
 #define CONST_EPS 1e-10
@@ -24,7 +25,7 @@ struct Photon {
         vec mu;    //Orientation
         double W;  //Weight remaining
         double t;  //Total elapsed lifetime
-        double v;  //Angular frequency (GHz)
+        double v;  //Angular frequency (THz)
         double S;  //Distance left to travel
         int n;     //Scattering order
         bool isBallistic;   //Has the photon scattered yet?
@@ -36,12 +37,22 @@ struct Photon {
         
         //Helper functions
         void Scatter(double eps1, double eps2, const Medium& p);
+        void Reflect();
+        
+        void storeRayPath(RayPath& path);
+        
+        void printstatus() const;
+        bool hasPath() const;
         
         double phi() const;
         double muR() const;
         double intersectR(double R) const;
         double intersectXY(double R, bool& xy) const;
         bool operator<(const Photon& rhs) const;  
+        Photon& operator=(const Photon& rhs);
+        
+        private:
+            RayPath* pth;
 };
 
 //Functions
@@ -52,6 +63,7 @@ Photon::Photon() {
     W = 1; t = 0; v = 550; n = 0;
     isBallistic = true; flipPhase = false;
     S = 0;
+    pth = nullptr;
 };
 
 //Copy constructor
@@ -65,6 +77,7 @@ Photon::Photon(const Photon& p) {
     this->n = p.n;
     this->S = p.S;
     this->flipPhase = p.flipPhase;
+    this->pth = p.pth;
 }
 
 //Constructor for specific photon direction and position
@@ -73,7 +86,13 @@ Photon::Photon(const vec& x, const vec& mu, double w=1, double t0=0) {
     W = w; t = t0; isBallistic = true;
     v = 0; n = 0; flipPhase = false;
     S = 0;
+    pth = nullptr;
 };
+
+void Photon::Reflect() {
+    if (pth)
+        pth->collide(x, t, W);
+}
 
 //Scatter the photon
 void Photon::Scatter(double eps1, double eps2, const Medium& p) {
@@ -106,6 +125,10 @@ void Photon::Scatter(double eps1, double eps2, const Medium& p) {
     };
     mu = vec(newX, newY, newZ);
     isBallistic = false;
+    
+    //Store raypath
+    if (pth)
+        pth->collide(x, t, W);
 }
 
 double Photon::phi() const {
@@ -182,6 +205,34 @@ double Photon::intersectR(double R) const {
 
 bool Photon::operator<(const Photon& rhs) const {
     return this->t < rhs.t;
+}
+
+Photon& Photon::operator=(const Photon& rhs) {
+    x = rhs.x;
+    mu = rhs.mu;
+    W = rhs.W;
+    t = rhs.t;
+    isBallistic = rhs.isBallistic;
+    v = rhs.v;
+    n = rhs.n;
+    S = rhs.S;
+    flipPhase = rhs.flipPhase;
+    pth = rhs.pth;
+    return *this;
+}
+
+void Photon::storeRayPath(RayPath& path) {
+    pth = &path;
+    pth->f = v;
+    pth->collide(x, t, W);
+}
+
+void Photon::printstatus() const {
+    cerr << "Position: " << x << "   Direction: " << mu << "   Weight: " << W << "   RayPath: " << pth << endl;
+}
+
+bool Photon::hasPath() const {
+    return (pth != nullptr);
 }
 
 #endif

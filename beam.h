@@ -33,7 +33,7 @@ struct Beam {
     double Zb = 0;                  //Focus location of beam (0 for infinity/unfocused)
     double Tb = 0;                  //Laser pulse duration
     double wb=5.5e2;                //Angular frequency in THz (5.5e5 ~ 545 nm light)
-    double dwb=50;                  //Angular frequency spread parameter (THz);
+    double dwb=0;                   //Angular frequency spread parameter (THz);
     double N0 = 0;
     
     BeamType beamprofile = BeamType::Uniform;
@@ -52,7 +52,7 @@ Beam::Beam() {
     beamprofile = BeamType::Uniform;
     beamdur = BeamDuration::Uniform;
     beamspec = BeamSpectrum::Uniform;
-    sin0=0.0; Rb=5e2; wb=5.5e2; dwb=50;
+    sin0=0.0; Rb=5e2; wb=5.5e2; dwb=0;
     Zb = 0; Tb = 0; Pb = 0; N0 = 0; E = 1e5;
 }
 
