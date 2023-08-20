@@ -35,6 +35,7 @@ struct Beam {
     double wb=5.5e2;                //Angular frequency in THz (5.5e5 ~ 545 nm light)
     double dwb=0;                   //Angular frequency spread parameter (THz);
     double N0 = 0;
+    double Rmax = 0;                //Maximum allowed radius 
     
     BeamType beamprofile = BeamType::Uniform;
     BeamSpread spreadfxn = BeamSpread::Collimated;
@@ -114,6 +115,7 @@ vector<Photon> Beam::sampleBeam(unsigned long int N0) {
     
     //Loop through and generate beam if needed
     double x,y;
+    double r2;
     double Xf = Zb*tan(asin(sin0));
     double Sp = sin(Pb);
     for (long unsigned int i = 0; i < N0; i ++) {
@@ -121,56 +123,63 @@ vector<Photon> Beam::sampleBeam(unsigned long int N0) {
         ///
         //  Calculate beam profile
         ///
-        if (Rb > 1) {        
-            //Random numbers
-            eps2 = roll();
-            eps = roll();
+        if (Rb > 1) {      
         
-            //Use the randos to generate x,y values based on model
-            switch (beamprofile) {
-                case BeamType::Uniform :
-                    x = Rb * sqrt(eps) * cos(2.0 * CONST_PI * eps2);
-                    y = Rb * sqrt(eps) * sin(2.0 * CONST_PI * eps2);
-                    break;
-                    
-                case BeamType::Gaussian :
-                    x = Rb * erfinvf((float)eps);
-                    y = x * sin(2.0 * CONST_PI * eps2);
-                    x = x * cos(2.0 * CONST_PI * eps2);
-                    break;
-                    
-                case BeamType::UniformEllipse :
-                    eps2 = atan(Sb/Rb*tan(2*CONST_PI*eps2));
-                    eps = Sb*Rb/sqrt(pow(Sb*cos(eps2),2)+pow(Rb*sin(eps2),2)) * sqrt(eps);
-                    x = eps*cos(eps2);
-                    y = eps*sin(eps2);
-                    break;
-                    
-                case BeamType::GaussianEllipse :
-                    x = Rb * erfinvf((float)eps);
-                    y = Sb * erfinvf((float)eps2);
-                    break;
-                    
-                case BeamType::UniformAnnulus :
-                    x = sqrt(Sb*Sb + (Rb*Rb-Sb*Sb)*eps) * cos(2.0 * CONST_PI * eps2);
-                    y = sqrt(Sb*Sb + (Rb*Rb-Sb*Sb)*eps) * sin(2.0 * CONST_PI * eps2);
-                    break;
-                    
-                case BeamType::GaussianAnnulus :
-                    x = Rb + (Sb - Rb) * erfinvf((float)eps);
-                    y = x * sin(2.0 * CONST_PI * eps2);
-                    x = x * cos(2.0 * CONST_PI * eps2);
-                    break;
-                    
-                default:
-                    x = 0;
-                    y = 0;
-                    break;
-            }
+            //Rejection sampling to make sure we're less than Rmax
+            r2 = 2*Rmax*Rmax;
+            do {
+                //Random numbers
+                eps2 = roll();
+                eps = roll();
             
-            //Set the positions
-            PHOTONS.at(i).x.X += x;
-            PHOTONS.at(i).x.Y += y;
+                //Use the randos to generate x,y values based on model
+                switch (beamprofile) {
+                    case BeamType::Uniform :
+                        x = Rb * sqrt(eps) * cos(2.0 * CONST_PI * eps2);
+                        y = Rb * sqrt(eps) * sin(2.0 * CONST_PI * eps2);
+                        break;
+                        
+                    case BeamType::Gaussian :
+                        x = Rb * erfinvf((float)eps);
+                        y = x * sin(2.0 * CONST_PI * eps2);
+                        x = x * cos(2.0 * CONST_PI * eps2);
+                        break;
+                        
+                    case BeamType::UniformEllipse :
+                        eps2 = atan(Sb/Rb*tan(2*CONST_PI*eps2));
+                        eps = Sb*Rb/sqrt(pow(Sb*cos(eps2),2)+pow(Rb*sin(eps2),2)) * sqrt(eps);
+                        x = eps*cos(eps2);
+                        y = eps*sin(eps2);
+                        break;
+                        
+                    case BeamType::GaussianEllipse :
+                        x = Rb * erfinvf((float)eps);
+                        y = Sb * erfinvf((float)eps2);
+                        break;
+                        
+                    case BeamType::UniformAnnulus :
+                        x = sqrt(Sb*Sb + (Rb*Rb-Sb*Sb)*eps) * cos(2.0 * CONST_PI * eps2);
+                        y = sqrt(Sb*Sb + (Rb*Rb-Sb*Sb)*eps) * sin(2.0 * CONST_PI * eps2);
+                        break;
+                        
+                    case BeamType::GaussianAnnulus :
+                        x = Rb + (Sb - Rb) * erfinvf((float)eps);
+                        y = x * sin(2.0 * CONST_PI * eps2);
+                        x = x * cos(2.0 * CONST_PI * eps2);
+                        break;
+                        
+                    default:
+                        x = 0;
+                        y = 0;
+                        break;
+                }
+                
+                //Set the positions
+                PHOTONS.at(i).x.X = x;
+                PHOTONS.at(i).x.Y = y;
+                r2 = PHOTONS.at(i).x.r2();
+                
+            } while ((Rmax>0) and (r2>Rmax*Rmax));
         }
         
         ///

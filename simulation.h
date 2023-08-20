@@ -27,6 +27,7 @@
 #define CONST_C  299.8
 #define CONST_PI 3.1415926535
 #define CONST_EPS 1e-10
+#define CONST_FRES 0.1
 
 using namespace std;
 
@@ -37,18 +38,23 @@ class Simulation {
         void setup();
         void run();
         void genBeam();
-        void genFluor();
+        void genFluor(double Emin);
+        
         void print();
+        void printstatus(int STEP) const;
+        void printstatusheader() const;
+        void printsettings() const;
         
         enum struct SimFlags {
-            BackWall      = 0b00000001,     //Whether there is a backwall in the simulation or semi-infinite
-            FrontWall     = 0b00000010,     //Whether there is a front wall or semi-infinite
-            RadialWall    = 0b00000100,     //Whether there is a cylindrical wall or infinite
-            Interference  = 0b00001000,     //Whether we should include interference in the image calculations
-            Saturation    = 0b00010000,     //Whether we should allow saturation of absorption in the simulation
-            SinglePhoton  = 0b00100000,     //Whether to operate in single photon mode
-            Fluorescence  = 0b01000000,     //Whether to generate fluorescence photons during the run
-            Cartesian     = 0b10000000,     //Whether the radial wall is square or not
+            BackWall      = 0b000000000001,     //Whether there is a backwall in the simulation or semi-infinite
+            FrontWall     = 0b000000000010,     //Whether there is a front wall or semi-infinite
+            RadialWall    = 0b000000000100,     //Whether there is a cylindrical wall or infinite
+            Interference  = 0b000000001000,     //Whether we should include interference in the image calculations
+            Saturation    = 0b000000010000,     //Whether we should allow saturation of absorption in the simulation
+            SinglePhoton  = 0b000000100000,     //Whether to operate in single photon mode
+            Fluorescence  = 0b000001000000,     //Whether to generate fluorescence photons during the run
+            Cartesian     = 0b000010000000,     //Whether the radial wall is square or not
+            TimeResolved  = 0b000100000000,     //Whether the radial wall is square or not
         };
     
     private:
@@ -61,7 +67,8 @@ class Simulation {
         int N0 = 5e6;                   //Number of initial photon groups
         double L=1e4;                   //Length of sample [um]
         double R=1e4;                   //Radius of sample [um]
-        double dT=1000;                 //Time step in simulation (0 for static)
+        double dT=1;                    //Time step in simulation
+        double dTf = 0;                 //Time step for fluorescence
         
         //Sim Flags
         SimFlags flags = (Simulation::SimFlags)3;
@@ -86,18 +93,28 @@ class Simulation {
         int THres = 10;
         int momentlvl = 4;
         int printSteps = 0;
+        unsigned long int trackPhoton = 0;
         unsigned long int storepaths = 50;
         
         //Calculated values
         vector<Photon> PHOTONS;
+        vector<Photon> NEWPHOTONS;
         vector<RayPath> PATHS;
-        double tsim;
+        unsigned long int storedFpaths = 0;
+        double tsim, tfluor;
+        
+        //Other things to keep track of
+        chrono::system_clock::time_point t0;
+        chrono::system_clock::time_point t1;
+        chrono::system_clock::time_point t2;
+        time_t STARTTIME;
+        string STARTTIMESTR;
 };
 
 Simulation::Simulation() {
     //Set default parameters
     n0=1.600; nx=1.600; nr=1.600;
-    L=1e4; R=1e4; dT=10; 
+    L=1e4; R=1e4; dT=1; dTf = 0;
     N0 = 1e6; maxstep = 5e6;
     Wmin = 1e-10; Wm = 0.1;
     Zres = 20; Rres = 20; Tres = 20; THres = 10; momentlvl = 4;
@@ -108,8 +125,8 @@ Simulation::Simulation() {
     imgR = Image(10,10,2*beam.Rb/5, ((int)flags & (int)SimFlags::Interference));
     imgT = Image(10,10,2*beam.Rb/5, ((int)flags & (int)SimFlags::Interference));
     cam = Camera(5, 1000, -1, 1.2, 50000, vec(100000,0,5000), vec(-1,0,0));
-    printSteps = 0;
-    tsim = 0; storepaths = 50;
+    printSteps = 0; storedFpaths = 0;
+    tsim = 0; tfluor = 0; storepaths = 50; trackPhoton = 0;
 }
 
 template<class T>
@@ -120,15 +137,6 @@ void remove(vector<T>& v, unsigned int i) {
 }
 
 void Simulation::print() {
-    //Store path data
-    if (storepaths) {
-        cerr << "Writing xyz file" << endl;
-        ofstream FILE(RayPath::ofbasename + ".xyz");
-        for (unsigned long int j = 0; j < storepaths; j ++)
-            PATHS.at(j).print(FILE);
-        FILE.close();
-    }
-    
     //Write output file
     cout << "==================================================================" << endl;
     cout << "Transmitted and reflected beams" << endl;
@@ -151,6 +159,15 @@ void Simulation::print() {
     cout << "Statistics" << endl;
     cout << "==================================================================" << endl;
     stats.print();
+    
+    //Store path data
+    if (storepaths) {
+        cerr << "Writing " << PATHS.size() << " paths to xyz file: " << RayPath::ofbasename + ".xyz" << endl;
+        ofstream FILE(RayPath::ofbasename + ".xyz");
+        for (unsigned long int j = 0; j < PATHS.size(); j ++)
+            PATHS.at(j).print(FILE);
+        FILE.close();
+    }
 }
 
 void Simulation::genBeam() {
@@ -159,51 +176,83 @@ void Simulation::genBeam() {
     PHOTONS = beam.sampleBeam(N0);
 }
 
-void Simulation::genFluor() {
-    //Alert the user
-    cerr << "FLUORESCENCE NOT IMPLEMENTED!" << endl;
+void Simulation::genFluor(double Emin) {
+    //If time-resolved, emit FQY * ABS * (1-exp(-dT/tau)) photons per cell divided into Nf packets (obviously weight > WMIN)
+    //-Otherwise, emit all light
     
+    //Initialize some values
+    int nf = 0;         //Number of packets we'll generate in this cell
+    double np = 0;
+    double wp = 0;
+    double ff;
+    double eps1, eps2, cost, sphi;
+    unsigned long int ii;
+    Photon newp;
+    
+    //If time-resolved, use dT to determine emission, otherwise emit all
+    if ((int)flags & (int)SimFlags::TimeResolved)
+        ff = exp(-(tsim-tfluor)/medium.tau());
+    else
+        ff = 0;
+    
+    //Iterate through grid and generate photons
+    for (auto it = grid.begin(); !it.end(); it ++) {
+        //Cache index
+        ii = it.index();
+        
+        //Figure out how many photons emitted at this time step
+        np = medium.FQY() * grid.at(4, ii) * (1.0 - ff);
+        
+        //See if this cell is OK
+        if (np < Emin)
+            continue;
+        
+        //Subtract weight from grid
+        grid.at(4, ii) *= ff;
+            
+        //Figure out how many packets we CAN generate, and weight per packet
+        nf = 1 + (int) (np / beam.E);
+        wp = np / (double) nf;
+
+        //Loop through packet count, generate, and add to photon vector
+        for (int i = 0; i < nf; i ++) {
+        
+            //Roll some dice
+            eps1 = roll();
+            eps2 = roll();
+            cost = 2*eps1 - 1;
+            sphi = sin(2*CONST_PI*eps2);
+            
+            //Calculate new position, direction, etc.
+            newp.x = grid.rand(ii);
+            newp.mu = vec(cost * sphi, sqrt(1-cost*cost) * sphi, sqrt(1-sphi*sphi));
+            newp.W = wp;
+            if ((int)flags & (int)SimFlags::TimeResolved)
+                newp.t = tsim;
+            else
+                newp.t = tsim + medium.emit_tau(roll());
+            newp.v = medium.emit_v(roll());
+            newp.S = -log(roll());
+            newp.flags = (Photon::PhotonFlags)5;
+            
+            //Store photon path if we have one
+            if (storedFpaths < storepaths) {
+                newp.storeRayPath(PATHS.at(storepaths + storedFpaths));
+                storedFpaths ++;
+            } else //Clear raypath since we don't reset it, otherwise all future fluorescence rays will point to the same one
+                newp.clearRayPath();
+            
+            //Emit the photon in stats
+            stats.emit(newp, newp.W);
+            
+            //Store the photon
+            NEWPHOTONS.push_back(newp);
+        }
+    }
+    tfluor = tsim;
 }
 
-void Simulation::setup() {
-    //Create output stats block
-    stats = Stats(Tres, THres, dT, momentlvl);
-    stats.setup();
-    
-    //Setup grid
-    if ((int)flags & (int)SimFlags::Cartesian)
-        grid = Grid(R, R, L, Rres, 1, Zres);
-    else
-        grid = Grid(R, L, Rres, 1, Zres);
-    grid.newval("Absorption");
-    grid.newval("Incident");
-    grid.clear();
-    
-    //Setup images and cameras
-    imgIC.clear();
-    imgT.clear();
-    imgR.clear();
-    cam.setup();
-    
-    //Initialize PATHS
-    PATHS = vector<RayPath>(storepaths);
-    
-    //Add to stats IC
-    double R;
-    for (unsigned int i = 0; i < PHOTONS.size(); i ++) {
-        //Store IC
-        imgIC.image(PHOTONS.at(i).x.X, PHOTONS.at(i).x.Y, PHOTONS.at(i).W);
-        
-        //Reflect photons at interface
-        R = stats.initialize(PHOTONS.at(i), n0/medium.n(PHOTONS.at(i).v));
-        PHOTONS.at(i).W *= (1-R);
-        PHOTONS.at(i).S = -log(roll());
-        
-        //Generate raypath objects if needed
-        if (i < storepaths)
-            PHOTONS.at(i).storeRayPath(PATHS.at(i));
-    }
-    
+void Simulation::printsettings() const {
     //Fresnel coefficients
     double n = medium.n();
     double Rspec = (n0-n)*(n0-n)/(n0+n)/(n0+n);
@@ -219,23 +268,28 @@ void Simulation::setup() {
     cout << "Front Wall: " << (((int)flags & (int)SimFlags::FrontWall) ? "True" : "False" ) << endl;
     cout << "Radial Wall: " << (((int)flags & (int)SimFlags::RadialWall) ? "True" : "False" ) << endl;
     cout << "Packet interference: " << (((int)flags & (int)SimFlags::Interference) ? "True" : "False" ) << endl;
-    cout << "Time-dependent: " << ((dT > 0) ? "True" : "False") << endl;
+    cout << "Time-dependent: " << (((int)flags & (int)SimFlags::TimeResolved) ? "True" : "False") << endl;
     cout << "Saturation: " << (((int)flags & (int)SimFlags::Saturation) ? "True" : "False" ) << endl;
     cout << "Single-photon mode: " << (((int)flags & (int)SimFlags::SinglePhoton) ? "True" : "False" ) << endl;
     cout << "Fluorescence generation: " << (((int)flags & (int)SimFlags::Fluorescence) ? "True" : "False" ) << endl;
     cout << "Side wall geometry: " << (((int)flags & (int)SimFlags::Cartesian) ? "Cartesian" : "Cylindrical" ) << endl;
     cout << "Photon packets: " << N0 << endl;
     cout << "Total photons: " << stats.PHI << endl;
+    cout << "Simulation time-step: " << dT << " ps" << endl;
+    if (((int)flags & (int)SimFlags::TimeResolved) && ((int)flags & (int)SimFlags::Fluorescence))
+        cout << "Fluorescence time-step: " << dTf << " ps" << endl;
     cout << "Front Refractive Index: " << n0 << endl;
     cout << "Back Refractive Index: " << nx << endl;
     cout << "Side Refractive Index: " << nr << endl;
-    if (storepaths)
+    if (storepaths) {
         cout << "Storing " << storepaths << " ray paths to file: " << RayPath::ofbasename << ".xyz" << endl;
-    cout << "Theoretical Max (Static) Step Count: " << ceil(log(Wmin)/log(medium.albedo())) + 1.0/Wm << endl;
-    if (dT > 0)
-        cout << "Theoretical Max (Dynamic) Step Count: " << ceil((ceil(log(Wmin)/log(medium.albedo())) + 1.0/Wm) / medium.we() / stats.dT) << endl;
+        if ((int)flags & (int)SimFlags::Fluorescence)
+            cout << "Storing " << storepaths << " fluorescence ray paths to file: " << RayPath::ofbasename << ".xyz" << endl;
+    }
+    cout << "Theoretical max (static) step count for absorption: " << ceil(log(Wmin)/log(medium.albedo()) + 1.0/Wm) << endl;
+    if ((int)flags & (int)SimFlags::TimeResolved)
+        cout << "Theoretical max (dynamic) step count for absorption: " << ceil((ceil(log(Wmin)/log(medium.albedo())) + 1.0/Wm) / medium.we() / stats.dT) << endl;
     cout << endl;
-    
     
     //Print medium settings
     medium.print();
@@ -267,31 +321,116 @@ void Simulation::setup() {
     cout << "==================================================================" << endl;
     cout << "Starting simulation" << endl;
     cout << "==================================================================" << endl;
+}
+
+void Simulation::setup() {
+    //Fluorescence timescale
+    if (dTf < CONST_EPS)
+        dTf = CONST_FRES * medium.tau();
+
+    //Create output stats block
+    stats = Stats(Tres, THres, dT, dTf, momentlvl);
+    stats.setup();
+    
+    //Setup grid
+    if ((int)flags & (int)SimFlags::Cartesian)
+        grid = Grid(2*R, 2*R, L, Rres, 1, Zres);
+    else
+        grid = Grid(R, L, Rres, 1, Zres);
+    grid.newval("Absorption");
+    grid.newval("Incident");
+    if ((int)flags & (int)SimFlags::Fluorescence) {
+        grid.newval("Reabsorption");
+        grid.newval("IncidentEmission");
+        grid.newval("ExcitedState");
+    }
+    grid.clear();
+    
+    //Setup images and cameras
+    imgIC.clear();
+    imgT.clear();
+    imgR.clear();
+    cam.setup();
+    
+    //Initialize PATHS
+    PATHS = vector<RayPath>(storepaths * (((int)flags&(int)SimFlags::Fluorescence) ? 2 : 1));
+    
+    //Add to stats IC
+    double R;
+    for (unsigned int i = 0; i < PHOTONS.size(); i ++) {
+        //Store IC
+        imgIC.image(PHOTONS.at(i).x.X, PHOTONS.at(i).x.Y, PHOTONS.at(i).W);
+        
+        //Reflect photons at interface
+        R = stats.initialize(PHOTONS.at(i), n0/medium.n(PHOTONS.at(i).v));
+        PHOTONS.at(i).W *= (1-R);
+        PHOTONS.at(i).S = -log(roll());
+        
+        //Generate raypath objects if needed
+        if (i < storepaths)
+            PHOTONS.at(i).storeRayPath(PATHS.at(i));
+    }
+    
+    //Print the settings
+    printsettings();
     
     //Sort the photons if we're time dependent
-    if (dT > 0) {
+    if ((int)flags & (int)SimFlags::TimeResolved) {
         cerr << "Sorting photon vector...";
         sort(begin(PHOTONS), end(PHOTONS));
         tsim = PHOTONS.at(0).t + dT;
+        tfluor = tsim;
         cerr << " Done!" << endl;
     }
+    
+}
+
+void Simulation::printstatusheader() const {
+    cerr << "   Start time: " << STARTTIMESTR << "     " << N0 << " particles";
+    cerr << "      Max steps: " << maxstep << endl;
+    cerr << "-------------------------------------------------------------------------------" << endl;
+    cerr << " Step [-]  sim t [ps]  total/step time [s]      particles       grid [photons] " << endl;
+    cerr << "-------------------------------------------------------------------------------" << endl;
+}
+
+void Simulation::printstatus(int STEP) const {
+    //Step and sim time
+    chrono::duration<double> ELAPSED;
+    cerr << setw(10) << STEP;
+    cerr << " ";
+    if ((int)flags & (int)SimFlags::TimeResolved) {
+        cerr << setw(10) << fixed << setprecision(3) << tsim;
+        cerr << " ";
+    } else
+        cerr << "           ";
+    
+    //Real time
+    ELAPSED = t2 - t0;
+    cerr << setw(10) << fixed << setprecision(1) << ELAPSED.count();
+    ELAPSED = t2 - t1;
+    cerr << "/" << setw(10) << fixed << setprecision(3) << ELAPSED.count();
+    cerr << " ";
+    
+    //Photons and energy
+    cerr << setw(9) << PHOTONS.size();
+    cerr << "+" << setw(9) << NEWPHOTONS.size() << " ";
+    cerr << setw(10) << scientific << setprecision(3) << grid.sum(4);
+    
+    //And finally new line
+    cerr << endl;
 }
 
 void Simulation::run() {
-    
     //Setup clocks
-    auto t0 = chrono::system_clock::now();
-    auto t1 = chrono::system_clock::now();
-    auto t2 = chrono::system_clock::now();
-    std::chrono::duration<double> ELAPSED;
-    time_t STARTTIME = chrono::system_clock::to_time_t(t0);
-    string STARTTIMESTR(ctime(&STARTTIME));
+    t0 = t1 = t2 = chrono::system_clock::now();
+    STARTTIME = chrono::system_clock::to_time_t(t0);
+    STARTTIMESTR = ctime(&STARTTIME);
     STARTTIMESTR = STARTTIMESTR.erase(STARTTIMESTR.back());
     
     //Initialize a whole lot of temporary variables
     double eps, ds, ds2, ka, ka0, ks, k, tempR, Fabs, m, c, sint;
     unsigned long int ii,jj,kk;
-    bool xy = false, done = false;
+    bool xy = false, done = false, END=false;
     int reflect;
     vec norm, u;
     Photon pt;
@@ -312,6 +451,10 @@ void Simulation::run() {
     unsigned int STEP = 0; 
     while (STEP <= maxstep) {
         
+        //Track the current photon
+        if (trackPhoton)
+            PHOTONS.at(trackPhoton).printstatus();
+        
         //Prepare for loop
         done = false;
         
@@ -321,7 +464,7 @@ void Simulation::run() {
             //Check that it's a good vector
             if (i >= PHOTONS.size())             //Exit if we've covered the whole vector
                 break;
-            if ((dT>0) and (PHOTONS.at(i).t >= tsim))       //If time-dependent, and tsim is earlier than photon time, skip to next iteration (photons are sorted)
+            if (((int)flags & (int)SimFlags::TimeResolved) and (PHOTONS.at(i).t >= tsim))       //If time-dependent, and tsim is earlier than photon time, skip to next iteration (photons are sorted)
                 break;                           //
             while (PHOTONS.at(i).W <= Emin) {    //Loop until W!=0
                 if (i < PHOTONS.size()-1)        //If not end, delete and continue
@@ -352,20 +495,56 @@ void Simulation::run() {
                         //Roll to determine scatter or absorb
                         eps = roll();
                         if (eps < ka/k) { //Absorb
-                            grid.at(0, ii,jj,kk) += PHOTONS.at(i).W;
+                            //Calculate statis
+                            grid.at((PHOTONS.at(i).isFluorescence()?2:0), ii,jj,kk) += PHOTONS.at(i).W;
+                            if (((int)flags & (int)SimFlags::Fluorescence) and !PHOTONS.at(i).isFluorescence())
+                                grid.at(4, ii,jj,kk) += PHOTONS.at(i).W;
                             stats.absorb(PHOTONS.at(i), PHOTONS.at(i).W);
+                            
+                            //Generate fluorescence photons
+                            if ((int)flags & (int)SimFlags::Fluorescence) {
+                                
+                                //Calculate direction
+                                eps = 2*roll() - 1;
+                                sint = sin(2*CONST_PI*roll());
+                                
+                                //Create fluorescence photon
+                                pt.x = PHOTONS.at(i).x;
+                                pt.mu = vec(eps * sint, sqrt(1-eps*eps)*sint, sqrt(1-sint*sint));
+                                pt.W = PHOTONS.at(i).W * medium.FQY();
+                                pt.t = PHOTONS.at(i).t + medium.emit_tau(roll());
+                                pt.v = medium.emit_v(roll());
+                                pt.S = -log(roll());
+                                pt.flags = (Photon::PhotonFlags)5;
+                                
+                                //Store ray paths of fluorescence data 
+                                if (storedFpaths < storepaths) {
+                                    pt.storeRayPath(PATHS.at(storepaths + storedFpaths));
+                                    storedFpaths ++;
+                                } else
+                                    pt.clearRayPath();
+                                
+                                //Emit the photon in stats
+                                stats.emit(pt, pt.W);
+                                NEWPHOTONS.push_back(pt);
+                            }
+                            
+                            //And kill the photon
                             PHOTONS.at(i).W = -1;
                             PHOTONS.at(i).S = 0;
+                            
                         } else { //Scatter
-                            grid.at(1, ii,jj,kk) += PHOTONS.at(i).W;
+                            grid.at((PHOTONS.at(i).isFluorescence()?3:1), ii,jj,kk) += PHOTONS.at(i).W;
                             stats.scatter(PHOTONS.at(i), PHOTONS.at(i).W);
                             PHOTONS.at(i).Scatter(roll(), roll(), medium);
                             PHOTONS.at(i).S = -log(roll());
                         }
                     } else {
                         //Update grids
-                        grid.at(0, ii,jj,kk) += PHOTONS.at(i).W * ka/k;
-                        grid.at(1, ii,jj,kk) += PHOTONS.at(i).W;
+                        grid.at((PHOTONS.at(i).isFluorescence()?2:0), ii,jj,kk) += PHOTONS.at(i).W * ka/k;
+                        if (((int)flags & (int)SimFlags::Fluorescence) and !PHOTONS.at(i).isFluorescence())
+                            grid.at(4, ii,jj,kk) += PHOTONS.at(i).W * ka/k;
+                        grid.at((PHOTONS.at(i).isFluorescence()?3:1), ii,jj,kk) += PHOTONS.at(i).W;
                     
                         //Update stats
                         stats.scatter(PHOTONS.at(i), PHOTONS.at(i).W);
@@ -380,7 +559,13 @@ void Simulation::run() {
             
                 //Get the local k and calculate the expected displacement
                 if ((int)flags & (int)SimFlags::Saturation) {
-                    Fabs = grid.norm(0, PHOTONS.at(i).x) / medium.dens();  //E = photons absorbed/volume, dens = molecules/volume, E/dens = photons absorbed/molecule
+                    //E = photons absorbed/volume, dens = molecules/volume, E/dens = photons absorbed/molecule
+                    if (PHOTONS.at(i).isFluorescence())
+                        Fabs = grid.norm(2, PHOTONS.at(i).x) / medium.dens();
+                    else if ((int)flags & (int)SimFlags::Fluorescence)
+                         Fabs = grid.norm(4, PHOTONS.at(i).x) / medium.dens();
+                    else
+                        Fabs = grid.norm(0, PHOTONS.at(i).x) / medium.dens();
                     if (Fabs > 0)
                         ka = ka0 / Fabs * (1.0 - exp(-Fabs));
                     else
@@ -436,7 +621,7 @@ void Simulation::run() {
                 }
                 
                 //-Check time boundary
-                if (dT > 0) {
+                if ((int)flags & (int)SimFlags::TimeResolved) {
                     ds2 = (tsim - PHOTONS.at(i).t) * CONST_C * k;
                     if (ds2 < ds and ds2 >= 0) {
                         ds = ds2;
@@ -506,7 +691,7 @@ void Simulation::run() {
                         if (eps < tempR) { //Reflect
                             //If reflecting off higher index, flip phase
                             if (m < 1)
-                                PHOTONS.at(i).flipPhase = !PHOTONS.at(i).flipPhase;
+                                PHOTONS.at(i).flipPhase();
                             
                             //Reflect the packet
                             PHOTONS.at(i).mu = u;
@@ -548,7 +733,7 @@ void Simulation::run() {
                         stats.reflect(PHOTONS.at(i), reflect, tempR, sint);
                         PHOTONS.at(i).W *= tempR;
                         if (m < 1)
-                            PHOTONS.at(i).flipPhase = !PHOTONS.at(i).flipPhase;
+                            PHOTONS.at(i).flipPhase();
                             
                         //And reflect the remainder of the photon packet
                         PHOTONS.at(i).mu = u;
@@ -557,10 +742,10 @@ void Simulation::run() {
                 }
                 
                 //Break here if we're dynamic and the photon time reaches tsim
-                if ((dT > 0) and (PHOTONS.at(i).t >= tsim))
+                if (((int)flags & (int)SimFlags::TimeResolved) and (PHOTONS.at(i).t >= tsim))
                     break;
                 //... or if we're static and we reach a small enough S value  
-                if ((dT <= 0) and (PHOTONS.at(i).S <= CONST_EPS)) {
+                if (!((int)flags & (int)SimFlags::TimeResolved) and (PHOTONS.at(i).S <= CONST_EPS)) {
                     PHOTONS.at(i).S = 0;
                     break;
                 }
@@ -576,34 +761,109 @@ void Simulation::run() {
             }
         }
         
-        //Increment T-step
-        tsim += dT;
+        //Add new photon packets as necessary
+        if ((int)flags & (int)SimFlags::Fluorescence) {
+            
+            //-Time-resolved version 
+            if ((int)flags & (int)SimFlags::TimeResolved) {
+                //Branch based on single- or multi-photon packets
+                //For single photons, copy into simulation when we reach the emission time
+                if ((int)flags & (int)SimFlags::SinglePhoton)  {
+                    for (unsigned long int zi = NEWPHOTONS.size()-1; zi >= 0 ; zi -- )
+                        if (NEWPHOTONS.at(zi).t <= tsim+dT) {       //TODO: MAKE THIS MORE EFFICIENT, MAYBE BY KEEPING NEWPHOTONS SORTED
+                            PHOTONS.push_back(NEWPHOTONS.at(zi));
+                            NEWPHOTONS.erase(NEWPHOTONS.begin()+zi);
+                        }
+                        
+                //Otherwise, generate packets based on fraction of light emitted within this time step
+                } else if (tsim - tfluor >= dTf) {
+                    genFluor(Emin);
+                    PHOTONS.insert(PHOTONS.end(), NEWPHOTONS.begin(), NEWPHOTONS.end());
+                    NEWPHOTONS.clear();
+                }
+                
+            //-Static version: immediately add photons in single-photon mode, add when out of primary photons otherwise
+            } else {
+                if ((int)flags & (int)SimFlags::SinglePhoton) {
+                    PHOTONS.insert(PHOTONS.end(), NEWPHOTONS.begin(), NEWPHOTONS.end());
+                    NEWPHOTONS.clear();
+                } else if (PHOTONS.size() == 0) {
+                    genFluor(Emin);
+                    PHOTONS.insert(PHOTONS.end(), NEWPHOTONS.begin(), NEWPHOTONS.end());
+                    NEWPHOTONS.clear();
+                }
+            }
+        }
         
-        //PRINT DEBUG INFO:
-        cerr<<"Step "<<STEP<<"/"<<maxstep;
-        if (STEP == 0) {
-            cerr << "   Start time: " << STARTTIMESTR <<"     "<<N0<<" particles";
-        } else {
-            t2 = chrono::system_clock::now();
-            ELAPSED = t2 - t0;
-            cerr << "   Time: " << ELAPSED.count() << "/";
-            ELAPSED = t2 - t1;
-            cerr << ELAPSED.count() << " s";
-            cerr << "     "<<PHOTONS.size() <<" particles remain";
-            t1 = t2;
-        } 
-        cerr<<endl;
+        //Print status
+        t2 = chrono::system_clock::now();
+        if (STEP == 0)
+            printstatusheader();
+        printstatus(STEP);
+        t1 = t2;
+        
+        //Increment T-step
         STEP += 1;
         
-        //Check if program done
+        //Check END conditions
         if (PHOTONS.size() == 0) {
+            
+            //No fluorescence so just end it
+            if ( !((int)flags & (int)SimFlags::Fluorescence) )
+                END = true;
+            
+            //If time-resolved, check if we have to wait until later to generate photons and increment, or exit
+            else if ((int)flags & (int)SimFlags::TimeResolved) {
+                
+                //Time-resolved and single-photon, so check if we have NEWPHOTONS
+                if ( (int)flags & (int)SimFlags::SinglePhoton ) {
+                    
+                    //Exit if no new photons here
+                    if (NEWPHOTONS.size() == 0)
+                        END = true;
+                    //Otherwise incrememnt to the next photon emission time
+                    else {
+                        tsim = NEWPHOTONS.at(0).t;
+                        for (unsigned long int zi = 1; zi < NEWPHOTONS.size(); zi ++ ) {
+                            if (tsim > NEWPHOTONS.at(zi).t)
+                                tsim = NEWPHOTONS.at(zi).t;
+                        }
+                    }
+                }
+                //Time-resolved and packet mode, so check if we have particles left in the excited state
+                else {
+                    
+                    //Exit if grid is empty
+                    if (grid.less(4, Emin))
+                        END = true;
+                    //Otherwise increment by the fluorescence time
+                    else
+                        tsim += dTf;
+                }
+            }
+            //If not time-resolved, we just continue until NEWPHOTONS is also empty
+            else if (NEWPHOTONS.size() == 0)
+                END = true;
+            else
+                tsim += dT;
+        }
+        //Otherwise, we just stay the course and increment time. NOTE: don't need to increment if not time-resolved so it's OK that one non-time-resolved case in branch above doesn't increment dT if not end
+        else
+            tsim += dT;
+        
+        //End if we set the condition
+        if (END) {
             cerr<<"Finished calculating energy deposition (in "<<STEP<<" steps)"<<endl;
             break;
         }
         
         //Print the grids if requested
         if ((printSteps) and ((STEP % printSteps) == 0)) {
-            cout << "Step: " << ((dT>0)?tsim : (double)STEP) << " " << ((dT>0)?" ps":"") << endl;
+            cout << "Step: ";
+            if ((int)flags & (int)SimFlags::TimeResolved)
+                cout << tsim << "  ps" << endl;
+            else
+                cout << STEP << endl;
             grid.print();
             cout << "--------------------" << endl;
         }
@@ -611,7 +871,11 @@ void Simulation::run() {
     
     //Print final grid only if we don't ask for steps
     if (!printSteps) {
-        cout << "Final state: " << ((dT>0)?tsim : (double)STEP) << " " << ((dT>0)?" ps":"") << endl;
+        cout << "Final state: ";
+        if ((int)flags & (int)SimFlags::TimeResolved)
+            cout << tsim << "  ps" << endl;
+        else
+            cout << STEP << endl;
         grid.print();
     }
     
@@ -667,6 +931,8 @@ void Simulation::load(const string& fname) {
                 cmdstr >> dT;
             else if (!key.compare("Rb"))
                 cmdstr >> beam.Rb;
+            else if (!key.compare("Rbmax"))
+                cmdstr >> beam.Rmax;
             else if (!key.compare("Pb"))
                 cmdstr >> beam.Pb;
             else if (!key.compare("Sb"))
@@ -683,6 +949,8 @@ void Simulation::load(const string& fname) {
                 cmdstr >> maxstep;
             else if (!key.compare("printsteps"))
                 cmdstr >> printSteps;
+            else if (!key.compare("trackphoton"))
+                cmdstr >> trackPhoton;
             else if (!key.compare("exportpaths"))
                 cmdstr >> storepaths;
             else if (!key.compare("pathbasefilename"))
@@ -745,6 +1013,13 @@ void Simulation::load(const string& fname) {
                 else
                     tmpflags &= ~((int)SimFlags::SinglePhoton);
                 flags = (SimFlags) tmpflags;
+            } else if (!key.compare("timedependent")) {
+                cmdstr >> tmpbool;
+                if (tmpbool)
+                    tmpflags |= (int)SimFlags::TimeResolved;
+                else
+                    tmpflags &= ~((int)SimFlags::TimeResolved);
+                flags = (SimFlags) tmpflags;
             } else if (!key.compare("fluorescence")) {
                 cmdstr >> tmpbool;
                 if (tmpbool)
@@ -779,8 +1054,6 @@ void Simulation::load(const string& fname) {
                 setup();
             else if (!key.compare("genBeam"))
                 genBeam();
-            else if (!key.compare("genFluor"))
-                genFluor();
             else if (!key.compare("print"))
                 print();
                 

@@ -30,6 +30,7 @@ struct Medium {
     double _Sa;                 //Absorption cross-section (peak)
     double _cs1, _cs2, _cs3;    //Scattering cross-section model parameters
     double _ca1, _ca2, _ca3;    //Absorption cross-section model parameters
+    double _tau;                //Excited state lifetime
      
     PhaseFunction phase;        //Phase function to use for calculation
     CrossSectionModel xc;       //Phase function to use for calculation
@@ -37,9 +38,10 @@ struct Medium {
     void print() const;
     
     double dens() const;
-    double FQY(double l = 0) const;
+    double FQY() const;
     double g(double l = 0) const;
     double g2(double l = 0) const;
+    double tau() const;
     
     double Ss(double l = 0) const;
     double Sa(double l = 0) const;
@@ -62,6 +64,9 @@ struct Medium {
     
     double scatter(double eps, double l = 0) const;
     double pscatter(double cost, double l = 0) const;
+
+    double emit_tau(double eps, double l = 0) const;
+    double emit_v(double eps, double l = 0) const;
     
     Medium();
     
@@ -96,13 +101,14 @@ void Medium::print() const {
 }
 
 Medium::Medium() {
-    _g = 0.98; _g2 = 1; _FQY = 1;
+    _g = 0.98; _g2 = 1; _FQY = 0.5;
     phase = PhaseFunction::HenyeyGreenstein;
     xc = CrossSectionModel::Constant;
     _f = 550; _Ss = 0.5; _Sa = 0.5;
     _dens = 1e-4; _n = 1.33;
     _cs1 = 0; _cs2 = 0; _cs3 = 0;
     _ca1 = 0; _ca2 = 0; _ca3 = 0;
+    _tau = 1000;
 }
 
 //Actually implement these
@@ -124,8 +130,11 @@ double Medium::dens() const {
 double Medium::n(double l) const {
     return _n;
 }
-double Medium::FQY(double l) const {
+double Medium::FQY() const {
     return _FQY;
+}
+double Medium::tau() const {
+    return _tau;
 }
 
 //These are trivial
@@ -213,4 +222,13 @@ double Medium::pscatter(double cost, double l) const {
             return 0;
     }
 }
+
+double Medium::emit_tau(double eps, double l) const {
+    return _tau * -log(eps);
+}
+
+double Medium::emit_v(double eps, double l) const {
+    return _f;
+}
+
 #endif

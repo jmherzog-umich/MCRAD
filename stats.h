@@ -12,12 +12,14 @@
 #define CONST_PI 3.1415926535
 #define CONST_EPS 1e-10
 
+///TODO:SEPARATE STORAGE FOR FLUORESCENCE DATA!
+
 using namespace std;
 
 struct Stats {
     //Settings
     int Tres, THETAres, momentlvl;
-    double dT, dTHETA, T, PHI;
+    double dT, dTf, dTHETA, T, PHI;
     double Rdiffuse, Tdiffuse, Tballistic, Rspec, Ldiffuse;
     
     //Output arrays for energy deposition, scatter, etc.
@@ -39,17 +41,24 @@ struct Stats {
     //Transmission/reflection times
     double tRd, tTd, t2Rd, t2Td;
     
+    //Fluorescence properties
+    double Ff, Fb, Fl, Ffballistic, Fbballistic, Flballistic;   //Front, Back, Side transmission (and ballistic)
+    vector<double> Fftheta, Fbtheta;                            //Front and back angle-dependence
+    vector<double> Fft, Fbt, Flt, Fat, Ft;                      //Front, back, side, reabsorption, emission time-dependence
+    vector<double> FMOMENTS, FSMOMENTS, FTHMOMENT, FTMOMENT, FSTMOMENT;
+    
     //Cache
-    double ADEP, ASCAT;
+    double ADEP, ASCAT, FDEP, FSCAT, FGEN;                      //Incident absorption/scatter, fluorescence absorption/scatter/generation
     
     //Functions
     //--Constructors
     Stats();
     Stats(int N, double dT, int LVL=4);
-    Stats(int nT, int nTH, double dT, int LVL=4);
+    Stats(int nT, int nTH, double dT, double dTf, int LVL=4);
     
     //--Accessors
     int getBinT(double t) const;
+    int getBinTf(double t) const;
     int getBinTh(double sint) const;
     
     //--Print results functions
@@ -60,6 +69,7 @@ struct Stats {
     //--Functions to aggregate data
     void scatter(const Photon& p, double w);
     void absorb(const Photon& p, double w);
+    void emit(const Photon& p, double w);
     void diffusion(const vec& x, double w, double t);
     double initialize(const Photon& x, double m);
     void reflect(const Photon& p, int surf, double R, double sint);
@@ -74,12 +84,13 @@ Stats::Stats(int n, double dT, int LVL) {
     Stats(n, n, dT, LVL);
 }
 
-Stats::Stats(int nT, int nTH, double dT, int LVL) {
+Stats::Stats(int nT, int nTH, double dT, double dTf, int LVL) {
     //Set default resolution
     Tres = nT;             //Number of time samples
     THETAres = nTH;        //Number of cos(theta) values for reflection
     momentlvl = LVL;       //Order of moments to calculate (only up to 4th order is implemented)
     this->dT = dT;
+    this->dTf = dTf;
     PHI = 0;               //Total number of photons
     
     //Reflection and transmission
@@ -102,6 +113,10 @@ Stats::Stats(int nT, int nTH, double dT, int LVL) {
     //Cache values
     ADEP = 0;
     ASCAT = 0;
+
+    //Fluorescence values
+    Ff = Fb = Fl = Ffballistic = Fbballistic = Flballistic = 0;
+    FDEP = FGEN = FSCAT = 0;
     
     //Grid resolution
     T = dT * Tres;
@@ -124,16 +139,39 @@ void Stats::setup() {
     Rstheta = vector<double>(THETAres, 0.0);
     Ttheta = vector<double>(THETAres, 0.0);
     
+    //Fluorescence values
+    Fftheta = vector<double>(THETAres, 0.0);
+    Fbtheta = vector<double>(THETAres, 0.0);
+    Fft = vector<double>(Tres, 0.0);
+    Fbt = vector<double>(Tres, 0.0);
+    Flt = vector<double>(Tres, 0.0);
+    Fat = vector<double>(Tres, 0.0);
+    Ft = vector<double>(Tres, 0.0);
+    
     //Initialize moments and other outputs
     MOMENTS = vector<double>(14, 0.0);
     THMOMENT = vector<double>(8, 0.0);
     TMOMENT = vector<double>(4, 0.0);
     SMOMENTS = vector<double>(14, 0.0);
     STMOMENT = vector<double>(4, 0.0);
+    
+    //Fluorescence moments
+    FMOMENTS = vector<double>(14, 0.0);
+    FTHMOMENT = vector<double>(8, 0.0);
+    FTMOMENT = vector<double>(4, 0.0);
+    FSMOMENTS = vector<double>(14, 0.0);
+    FSTMOMENT = vector<double>(4, 0.0);
 }
 
 int Stats::getBinT(double t) const {
     int binT = (int)(t/dT);
+    if ((binT >= Tres) or (binT < 0))
+        return -1;
+    return binT;
+}
+
+int Stats::getBinTf(double t) const {
+    int binT = (int)((t-dTf)/dTf);
     if ((binT >= Tres) or (binT < 0))
         return -1;
     return binT;
@@ -148,12 +186,58 @@ int Stats::getBinTh(double sint) const {
     return binTheta;
 }
 
+void Stats::emit(const Photon& p, double W) {
+    FGEN += W;
+    int binT = getBinTf(p.t);
+    if (binT >= 0)
+        Ft.at(binT) += W;
+}
+
 void Stats::absorb(const Photon& p, double W) {
     //Initialize
     double t = p.t;
     const vec x = p.x;
+    int binT;
     
     //Calculate moments
+    if (p.isFluorescence()) {
+        //Temporal absorption data
+        FDEP += W;
+        binT = getBinTf(t);
+        if (binT >= 0)
+            Fat.at(binT) += W;
+        
+        //Absorption moments for fluorescence
+        if (momentlvl > 0) {
+            FMOMENTS.at(0) += W * x.Z;
+            FMOMENTS.at(1) += W * x.r();
+            FTMOMENT.at(0) += W * t;
+        } if (momentlvl > 1) {
+            FMOMENTS.at(2) += W * pow(x.Z,2);
+            FMOMENTS.at(3) += W * x.r() * x.Z;
+            FMOMENTS.at(4) += W * pow(x.r(),2);
+            FTMOMENT.at(1) += W * pow(t,2);
+        } if (momentlvl > 2) {
+            FMOMENTS.at(5) += W * pow(x.Z,3);
+            FMOMENTS.at(6) += W * x.r() * pow(x.Z,2);
+            FMOMENTS.at(7) += W * x.Z * pow(x.r(),2);
+            FMOMENTS.at(8) += W * pow(x.r(),3);
+            FTMOMENT.at(2) += W * pow(t,3);
+        } if (momentlvl > 3) {
+            FMOMENTS.at(9) += W * pow(x.Z,4);
+            FMOMENTS.at(10) += W * x.r() * pow(x.Z,3);
+            FMOMENTS.at(11) += W * pow(x.Z * x.r(),2);
+            FMOMENTS.at(12) += W * x.Z * pow(x.r(),3);
+            FMOMENTS.at(13) += W * pow(x.r(),4);
+            FTMOMENT.at(3) += W * pow(t,4);
+        }
+        
+        //And we're done
+        return;
+    }
+    
+    //Normal photons
+    binT = getBinT(t);
     if (momentlvl > 0) {
         MOMENTS.at(0) += W * x.Z;
         MOMENTS.at(1) += W * x.r();
@@ -188,7 +272,6 @@ void Stats::absorb(const Photon& p, double W) {
     t2a += p.t*p.t * W;
     
     //Time vector
-    int binT = getBinT(t);
     if (binT >= 0)
         At.at(binT) += W;
 }
@@ -197,6 +280,38 @@ void Stats::scatter(const Photon& p, double W) {
     //Initialize
     double t = p.t;
     const vec x = p.x;
+    
+    //Calculate moments
+    if (p.isFluorescence()) {
+        //Scattering data
+        FSCAT += W;
+        
+        //Scattering fluorescence moments
+        if (momentlvl > 0) {
+            FSMOMENTS.at(0) += W * x.Z;
+            FSMOMENTS.at(1) += W * x.r();
+            FSTMOMENT.at(0) += W * t;
+        } if (momentlvl > 1) {
+            FSMOMENTS.at(2) += W * pow(x.Z,2);
+            FSMOMENTS.at(3) += W * x.r() * x.Z;
+            FSMOMENTS.at(4) += W * pow(x.r(),2);
+            FSTMOMENT.at(1) += W * pow(t,2);
+        } if (momentlvl > 2) {
+            FSMOMENTS.at(5) += W * pow(x.Z,3);
+            FSMOMENTS.at(6) += W * x.r() * pow(x.Z,2);
+            FSMOMENTS.at(7) += W * x.Z * pow(x.r(),2);
+            FSMOMENTS.at(8) += W * pow(x.r(),3);
+            FSTMOMENT.at(2) += W * pow(t,3);
+        } if (momentlvl > 3) {
+            FSMOMENTS.at(9) += W * pow(x.Z,4);
+            FSMOMENTS.at(10) += W * x.r() * pow(x.Z,3);
+            FSMOMENTS.at(11) += W * pow(x.Z * x.r(),2);
+            FSMOMENTS.at(12) += W * x.Z * pow(x.r(),3);
+            FSMOMENTS.at(13) += W * pow(x.r(),4);
+            FSTMOMENT.at(3) += W * pow(t,4);
+        }
+        return;
+    }
 
     //Calculate scattering moments
     if (momentlvl > 0) {
@@ -270,11 +385,55 @@ void Stats::reflect(const Photon& p, int surf, double R, double sint) {
     //Do moments first since they depend only on the power (not amplitude)
     //Bin in exit angle
     binTHETA = getBinTh(sint);
-    binT = getBinT(p.t);
+    
+    //Do fluorescence first then quit
+    if (p.isFluorescence()) {
+        binT = getBinTf(p.t);
+        switch (surf) {
+            case 1:
+                Fb += (1-R) * W;
+                if (binTHETA+1)
+                    Fbtheta.at(binTHETA) += W * (1-R);
+                if (binT >= 0)
+                    Fbt.at(binT) += (1-R) * W;
+                if (p.isBallistic())
+                    Fbballistic += W * (1-R);
+                break;
+            case 2:
+                Ff += (1-R) * W;
+                if (binTHETA+1)
+                    Fftheta.at(binTHETA) += W * (1-R);
+                if (binT >= 0)
+                    Fft.at(binT) += (1-R) * W;
+                if (p.isBallistic())
+                    Ffballistic += W * (1-R);
+                break;
+            case 3:
+                Fl += (1-R) * W;
+                if (binT >= 0)
+                    Flt.at(binT) += (1-R) * W;
+                if (p.isBallistic())
+                    Flballistic += W * (1-R);
+                break;
+        }
+        
+        //Transmission angle moments
+        if (momentlvl > 0)
+            FTHMOMENT.at(0+((surf == 1) ? 4 : 0)) += W * (1-R) * sint;
+        if (momentlvl > 1)
+            FTHMOMENT.at(1+((surf == 1) ? 4 : 0)) += W * (1-R) * pow(sint,2);
+        if (momentlvl > 2)
+            FTHMOMENT.at(2+((surf == 1) ? 4 : 0)) += W * (1-R) * pow(sint,3);
+        if (momentlvl > 3)
+            FTHMOMENT.at(3+((surf == 1) ? 4 : 0)) += W * (1-R) * pow(sint,4);
+        
+        return;
+    }
     
     //Get moments
+    binT = getBinT(p.t);
     if (p.n > 0) {
-        if (momentlvl > 3)
+        if (momentlvl > 0)
             THMOMENT.at(0+((surf == 1) ? 4 : 0)) += W * (1-R) * sint;
         if (momentlvl > 1)
             THMOMENT.at(1+((surf == 1) ? 4 : 0)) += W * (1-R) * pow(sint,2);
@@ -304,7 +463,7 @@ void Stats::reflect(const Photon& p, int surf, double R, double sint) {
             Ttheta.at(binTHETA) += W * (1-R);
         if (binT >= 0)
             Tt.at(binT) += (1-R) * W;
-        if (p.isBallistic)
+        if (p.isBallistic())
             Tballistic += W * (1-R);
     } else if (surf == 2) {
         Rdiffuse += (1-R) * W;
@@ -354,10 +513,13 @@ double Stats::initialize(const Photon& p, double m) {
 }
 
 void Stats::printTime() const {
+    //Print header
     cout << endl << "Temporal profiles [photons/time step]:" << endl;
     cout << "  T [ps]: ";
     for (int i = 0; i < Tres; i ++)
         cout << scientific << setw(18) << dT * i;
+        
+    //Now print the reflection/transmission/absorption data
     cout << endl << "Rdiffuse: ";
     for (int i = 0; i < Tres; i ++)
         cout << scientific << setw(18) << Rt.at(i);
@@ -370,6 +532,31 @@ void Stats::printTime() const {
     cout << endl << "Adep:     ";
     for (int i = 0; i < Tres; i ++)
         cout << scientific << setw(18) << At.at(i);
+    
+    //If no fluorescence, exit here
+    if (FGEN < CONST_EPS)
+        return;
+        
+    //Otherwise print fluorescence
+    cout << endl << endl;
+    cout << " Tf [ps]: ";
+    for (int i = 0; i < Tres; i ++)
+        cout << scientific << setw(18) << dTf * (i+1);
+    cout << endl << "Femitted: ";
+    for (int i = 0; i < Tres; i ++)
+        cout << scientific << setw(18) << Ft.at(i);
+    cout << endl << "Ffront:   ";
+    for (int i = 0; i < Tres; i ++)
+        cout << scientific << setw(18) << Fft.at(i);
+    cout << endl << "Fback:    ";
+    for (int i = 0; i < Tres; i ++)
+        cout << scientific << setw(18) << Fbt.at(i);
+    cout << endl << "Fside:    ";
+    for (int i = 0; i < Tres; i ++)
+        cout << scientific << setw(18) << Flt.at(i);
+    cout << endl << "Freabs:   ";
+    for (int i = 0; i < Tres; i ++)
+        cout << scientific << setw(18) << Fat.at(i);
 }
 
 void Stats::print() const {
@@ -393,52 +580,154 @@ void Stats::print() const {
         cout << scientific << setw(18) << Ttheta.at(i)/PHI;
     cout<<endl;
     
+    //Print fluorescence part
+    if (FGEN > CONST_EPS) {
+        cout<<"Ffront(theta):  ";
+        for (int i = 0; i < THETAres; i ++)
+            cout << scientific << setw(18) << Fftheta.at(i)/PHI;
+        cout<<endl;
+        cout<<"Fback(theta):   ";
+        for (int i = 0; i < THETAres; i ++)
+            cout << scientific << setw(18) << Fbtheta.at(i)/PHI;
+        cout<<endl;
+    }
+    
     //Deposition energy moments (time)
     if (momentlvl > 0) {
         cout <<endl;
-        cout << "Energy scatter, absorption moments (time) [ps**n]:" << endl;
-        cout << "  E[T]     = " << STMOMENT[0]/ASCAT << "     " << TMOMENT[0]/ADEP << endl;
-    } if (momentlvl > 1)
-        cout << "  E[T2]    = " << STMOMENT[1]/ASCAT << "     " << TMOMENT[1]/ADEP << endl;
-    if (momentlvl > 2)
-        cout << "  E[T3]    = " << STMOMENT[2]/ASCAT << "     " << TMOMENT[2]/ADEP << endl;
-    if (momentlvl > 3)
-        cout << "  E[T4]    = " << STMOMENT[3]/ASCAT << "     " << TMOMENT[3]/ADEP << endl;
+        cout << "Incident scatter, Incident absorption";
+        if (FGEN > CONST_EPS)
+            cout << ", Fluorescence scatter, Fluorescence reabsorption";
+        cout << " moments (time) [ps**n]:" << endl;
+        cout << "  E[T]     = " << STMOMENT[0]/ASCAT << "     " << TMOMENT[0]/ADEP;
+        if (FGEN > CONST_EPS)
+            cout << "     " << FSTMOMENT[0]/FSCAT << "     " << FTMOMENT[0]/FDEP;
+    } if (momentlvl > 1) {
+        cout << endl << "  E[T2]    = " << STMOMENT[1]/ASCAT << "     " << TMOMENT[1]/ADEP;
+        if (FGEN > CONST_EPS)
+            cout << "     " << FSTMOMENT[1]/FSCAT << "     " << FTMOMENT[1]/FDEP;
+        
+    } if (momentlvl > 2) {
+        cout << endl << "  E[T3]    = " << STMOMENT[2]/ASCAT << "     " << TMOMENT[2]/ADEP;
+        if (FGEN > CONST_EPS)
+            cout << "     " << FSTMOMENT[2]/FSCAT << "     " << FTMOMENT[2]/FDEP;
+    } if (momentlvl > 3) {
+        cout << endl << "  E[T4]    = " << STMOMENT[3]/ASCAT << "     " << TMOMENT[3]/ADEP;
+        if (FGEN > CONST_EPS)
+            cout << "     " << FSTMOMENT[3]/FSCAT << "     " << FTMOMENT[3]/FDEP;
+    }
+    cout << endl;
     
     //Deposition energy moments (space)
     if (momentlvl > 0) {
+    
+        //Header
         cout <<endl;
-        cout << "Energy scatter, absorption moments (space) [um**n]:" << endl;
-        cout << "  E[Z]    = " << SMOMENTS[0]/ASCAT << "     " << MOMENTS[0]/ADEP << endl;
-        cout << "  E[R]    = " << SMOMENTS[1]/ASCAT << "     " << MOMENTS[1]/ADEP << endl;
+        cout << "Incident scatter, Incident absorption";
+        if (FGEN > CONST_EPS)
+            cout << ", Fluorescence scatter, Fluorescence reabsorption";
+        cout << " moments (space) [um**n]:" << endl;
+        
+        //Moment Z
+        cout << "  E[Z]    = " << SMOMENTS[0]/ASCAT << "     " << MOMENTS[0]/ADEP;
+        if (FGEN > CONST_EPS)
+            cout << "     " << FSMOMENTS[0]/FSCAT << "     " << FMOMENTS[0]/FDEP;
+        
+        //Moment R
+        cout << endl << "  E[R]    = " << SMOMENTS[1]/ASCAT << "     " << MOMENTS[1]/ADEP;
+        if (FGEN > CONST_EPS)
+            cout << "     " << FSMOMENTS[1]/FSCAT << "     " << FMOMENTS[1]/FDEP;
+            
     } if (momentlvl > 1) {
-        cout << "  E[Z2]   = " << SMOMENTS[2]/ASCAT << "     " << MOMENTS[2]/ADEP << endl;
-        cout << "  E[RZ]   = " << SMOMENTS[3]/ASCAT << "     " << MOMENTS[3]/ADEP << endl;
-        cout << "  E[R2]   = " << SMOMENTS[4]/ASCAT << "     " << MOMENTS[4]/ADEP << endl;
+        //Moment Z*Z
+        cout << endl << "  E[Z2]   = " << SMOMENTS[2]/ASCAT << "     " << MOMENTS[2]/ADEP;
+        if (FGEN > CONST_EPS)
+            cout << "     " << FSMOMENTS[2]/FSCAT << "     " << FMOMENTS[2]/FDEP;
+        
+        //Moment R*Z
+        cout << endl << "  E[RZ]   = " << SMOMENTS[3]/ASCAT << "     " << MOMENTS[3]/ADEP;
+        if (FGEN > CONST_EPS)
+            cout << "     " << FSMOMENTS[3]/FSCAT << "     " << FMOMENTS[3]/FDEP;
+        
+        //Moment R*R
+        cout << endl << "  E[R2]   = " << SMOMENTS[4]/ASCAT << "     " << MOMENTS[4]/ADEP;
+        if (FGEN > CONST_EPS)
+            cout << "     " << FSMOMENTS[4]/FSCAT << "     " << FMOMENTS[4]/FDEP;
+        
     } if (momentlvl > 2) {
-        cout << "  E[Z3]   = " << SMOMENTS[5]/ASCAT << "     " << MOMENTS[5]/ADEP << endl;
-        cout << "  E[Z2R]  = " << SMOMENTS[6]/ASCAT << "     " << MOMENTS[6]/ADEP << endl;
-        cout << "  E[ZR2]  = " << SMOMENTS[7]/ASCAT << "     " << MOMENTS[7]/ADEP << endl;
-        cout << "  E[R3]   = " << SMOMENTS[8]/ASCAT << "     " << MOMENTS[8]/ADEP << endl;
+        //Moment Z*Z*Z
+        cout << endl << "  E[Z3]   = " << SMOMENTS[5]/ASCAT << "     " << MOMENTS[5]/ADEP;
+        if (FGEN > CONST_EPS)
+            cout << "     " << FSMOMENTS[5]/FSCAT << "     " << FMOMENTS[5]/FDEP;
+
+        //Moment Z*Z*R
+        cout << endl << "  E[Z2R]  = " << SMOMENTS[6]/ASCAT << "     " << MOMENTS[6]/ADEP;
+        if (FGEN > CONST_EPS)
+            cout << "     " << FSMOMENTS[6]/FSCAT << "     " << FMOMENTS[6]/FDEP;
+        
+        //Moment Z*R*R
+        cout << endl << "  E[ZR2]  = " << SMOMENTS[7]/ASCAT << "     " << MOMENTS[7]/ADEP;
+        if (FGEN > CONST_EPS)
+            cout << "     " << FSMOMENTS[7]/FSCAT << "     " << FMOMENTS[7]/FDEP;
+        
+        //Moment R*R*R
+        cout << endl << "  E[R3]   = " << SMOMENTS[8]/ASCAT << "     " << MOMENTS[8]/ADEP;
+        if (FGEN > CONST_EPS)
+            cout << "     " << FSMOMENTS[8]/FSCAT << "     " << FMOMENTS[8]/FDEP;
+            
     } if (momentlvl > 3) {
-        cout << "  E[Z4]   = " << SMOMENTS[9]/ASCAT << "     " << MOMENTS[9]/ADEP << endl;
-        cout << "  E[Z3R]  = " << SMOMENTS[10]/ASCAT << "     " << MOMENTS[10]/ADEP << endl;
-        cout << "  E[Z2R2] = " << SMOMENTS[11]/ASCAT << "     " << MOMENTS[11]/ADEP << endl;
-        cout << "  E[ZR3]  = " << SMOMENTS[12]/ASCAT << "     " << MOMENTS[12]/ADEP << endl;
-        cout << "  E[R4]   = " << SMOMENTS[13]/ASCAT << "     " << MOMENTS[13]/ADEP << endl;
+        //Moment Z*Z*Z*Z
+        cout << endl << "  E[Z4]   = " << SMOMENTS[9]/ASCAT << "     " << MOMENTS[9]/ADEP;
+        if (FGEN > CONST_EPS)
+            cout << "     " << FSMOMENTS[9]/FSCAT << "     " << FMOMENTS[9]/FDEP;
+        
+        //Moment Z*Z*Z*R
+        cout << endl << "  E[Z3R]  = " << SMOMENTS[10]/ASCAT << "     " << MOMENTS[10]/ADEP;
+        if (FGEN > CONST_EPS)
+            cout << "     " << FSMOMENTS[10]/FSCAT << "     " << FMOMENTS[10]/FDEP;
+        
+        //Moment Z*Z*R*R
+        cout << endl << "  E[Z2R2] = " << SMOMENTS[11]/ASCAT << "     " << MOMENTS[11]/ADEP;
+        if (FGEN > CONST_EPS)
+            cout << "     " << FSMOMENTS[11]/FSCAT << "     " << FMOMENTS[11]/FDEP;
+        
+        //Moment Z*R*R
+        cout << endl << "  E[ZR3]  = " << SMOMENTS[12]/ASCAT << "     " << MOMENTS[12]/ADEP;
+        if (FGEN > CONST_EPS)
+            cout << "     " << FSMOMENTS[12]/FSCAT << "     " << FMOMENTS[12]/FDEP;
+        
+        //Moment R*R*R*R
+        cout << endl << "  E[R4]   = " << SMOMENTS[13]/ASCAT << "     " << MOMENTS[13]/ADEP;
+        if (FGEN > CONST_EPS)
+            cout << "     " << FSMOMENTS[13]/FSCAT << "     " << FMOMENTS[13]/FDEP;
+            
     }
     
     //Transmission angle moments
     if (momentlvl > 0) {
         cout << endl << endl;
-        cout << "Transmission angle moments (R/T [-], E[THETA**n] [rad**n]):";
-        cout << endl << "  R     = " << Rdiffuse/PHI << ",";
+        cout << "Transmission";
+        if (FGEN > CONST_EPS)
+            cout << "/Emission";
+        cout << " angle moments (R/T";
+        if (FGEN > CONST_EPS)
+            cout << "/Ff/Fb";
+        cout << " [-], E[THETA**n] [rad**n]):";
+        cout << endl << "  R     = " << fixed << Rdiffuse/PHI << ",";
         for (int i = 0; i < 4; i ++)
             cout << " " << fixed << setw(10) << THMOMENT[i]/Rdiffuse;
-    } if (momentlvl > 1) {
-        cout << endl << "  T     = " << Tdiffuse/PHI << ",";
+        cout << endl << "  T     = " << fixed << Tdiffuse/PHI << ",";
         for (int i = 4; i < 8; i ++)
             cout << " " << fixed << setw(10) << THMOMENT[i]/Tdiffuse;
+        if (FGEN > CONST_EPS) {
+            cout << endl << "  Ff    = " << fixed << Ff/PHI << ",";
+            for (int i = 0; i < 4; i ++)
+                cout << " " << fixed << setw(10) << FTHMOMENT[i]/Ff;
+            cout << endl << "  Fb    = " << fixed << Fb/PHI << ",";
+            for (int i = 4; i < 8; i ++)
+                cout << " " << fixed << setw(10) << FTHMOMENT[i]/Fb;
+        
+        }
     }
     cout<<endl;
     
@@ -447,14 +736,29 @@ void Stats::print() const {
     
     //Reflection coefficients (total)
     cout << endl << endl;
-    cout << "Reflection/Transmission/Absorption coefficients [-]:" << endl;
-    cout << "  Rdiffuse   = " << fixed << setw(10) << Rdiffuse/PHI << endl;
-    cout << "  Rspecular  = " << fixed << setw(10) << Rspec/PHI << endl;
-    cout << "  Tdiffuse   = " << fixed << setw(10) << Tdiffuse/PHI << endl;
-    cout << "  Tballistic = " << fixed << setw(10) << Tballistic/PHI << endl;
-    cout << "  Ldiffuse   = " << fixed << setw(10) << Ldiffuse/PHI << endl;
-    cout << "  A          = " << fixed << setw(10) << ADEP/PHI << endl << endl;
-    cout << "Rd + Rs + Td + A + Ld = " << (Rdiffuse + Rspec + Tdiffuse + ADEP + Ldiffuse) / PHI << endl;
+    cout << "Reflection/Transmission/Absorption";
+    if (FGEN > CONST_EPS)
+        cout << "/Emission";
+    cout << " coefficients [photon/source photon]:" << endl;
+    cout << "  Rdiffuse   = " << fixed << setw(10) << Rdiffuse/PHI;
+    if (FGEN > CONST_EPS)
+        cout << "     " << "  Fgen       = " << fixed << setw(10) << FGEN/PHI;
+    cout << endl << "  Rspecular  = " << fixed << setw(10) << Rspec/PHI;
+    if (FGEN > CONST_EPS)
+        cout << "     " << "  Ffront     = " << fixed << setw(10) << Ff/PHI;
+    cout << endl << "  Tdiffuse   = " << fixed << setw(10) << Tdiffuse/PHI;
+    if (FGEN > CONST_EPS)
+        cout << "     " << "  Fback      = " << fixed << setw(10) << Fb/PHI;
+    cout << endl << "  Tballistic = " << fixed << setw(10) << Tballistic/PHI;
+    if (FGEN > CONST_EPS)
+        cout << "     " << "  Fside      = " << fixed << setw(10) << Fl/PHI;
+    cout << endl << "  Ldiffuse   = " << fixed << setw(10) << Ldiffuse/PHI;
+    if (FGEN > CONST_EPS)
+        cout << "     " << "  Fabs       = " << fixed << setw(10) << FDEP/PHI;
+    cout << endl << "  A          = " << fixed << setw(10) << ADEP/PHI << endl << endl;
+    cout << "1 - (Rd + Rs + Td + A + Ld)   ?=  0  =  " << 1-(Rdiffuse + Rspec + Tdiffuse + ADEP + Ldiffuse) / PHI << endl;
+    if (FGEN > CONST_EPS)
+        cout << "Fg - (Ff + Fb + Fl + Fa)      ?=  0  =  " << (FGEN - Ff - Fb - Fl - FDEP) / PHI << endl;
     
     //Reflection time/order
     cout << endl << endl;

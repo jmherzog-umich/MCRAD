@@ -17,6 +17,7 @@ struct RayPath {
     double f;       //frequency
     unsigned long int i;
     vector<double> x, y, z, t, I;
+    bool isFluorescence;
     
     static string ofbasename;
     
@@ -50,15 +51,15 @@ void RayPath::print(ofstream& FILE) const {
 }
     
 RayPath::RayPath() {
-    i = i0; i0 += 1; f = 0;
+    i = i0; i0 += 1; f = 0; isFluorescence = false;
 }
 
 RayPath::RayPath(double v) {
-    i = i0; i0 += 1; f = v;
+    i = i0; i0 += 1; f = v; isFluorescence = false;
 }
 
 RayPath::RayPath(double v, double I0) {
-    i = i0; i0 += 1; f = v;
+    i = i0; i0 += 1; f = v; isFluorescence = false;
     I.push_back(I0);
     x.push_back(0);
     y.push_back(0);
@@ -67,7 +68,7 @@ RayPath::RayPath(double v, double I0) {
 }
 
 RayPath::RayPath(double v, double I0, const vec& x0, double t0) {
-    i = i0; i0 += 1;
+    i = i0; i0 += 1; isFluorescence = false;
     I.push_back(I0);
     x.push_back(x0.X);
     y.push_back(x0.Y);

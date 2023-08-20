@@ -1,22 +1,26 @@
 Ss 1
-Sa 0.01
+Sa 1
 N0 5000000
 Rres 20
 Zres 20
 THres 20
-Tres 20
+Tres 200
 dens 0.5
-R 10000
-L 1000
-dT 0.1
+R 1000
+L 100
+dT 0.01
 Rb 500
+Rbmax 1000
 phase 0
 backwall 1
 frontwall 1
 sidewall 1
 cartesian 1
+fluorescence 1
+timedependent 1
+singlephoton 1
 beamprofile 1
-pathbasefilename raypath_film
+pathbasefilename test
 genBeam
 setup
 run

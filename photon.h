@@ -20,6 +20,12 @@ struct Photon {
     
     public:
     
+        enum struct PhotonFlags {
+            isBallistic      = 0b00000001,      //Whether the photon has collided yet
+            flippedPhase     = 0b00000010,      //Whether the phase should be flipped because of reflection from a higher index medium
+            isFluoresce      = 0b00000100,      //Whether this is a fluorescence emission packet
+        };
+    
         //Data members
         vec x;     //Position
         vec mu;    //Orientation
@@ -28,8 +34,9 @@ struct Photon {
         double v;  //Angular frequency (THz)
         double S;  //Distance left to travel
         int n;     //Scattering order
-        bool isBallistic;   //Has the photon scattered yet?
-        bool flipPhase;
+        
+        //Flags
+        PhotonFlags flags = PhotonFlags::isBallistic;
         
         Photon();
         Photon(const Photon& p);
@@ -40,9 +47,16 @@ struct Photon {
         void Reflect();
         
         void storeRayPath(RayPath& path);
+        void clearRayPath();
         
         void printstatus() const;
         bool hasPath() const;
+        
+        bool isFluorescence() const;
+        bool isBallistic() const;
+        bool flippedPhase() const;
+        
+        void flipPhase();
         
         double phi() const;
         double muR() const;
@@ -61,7 +75,7 @@ Photon::Photon() {
     x.X = 0; x.Y = 0; x.Z = 0;
     mu.X = 0; mu.Y = 0; mu.Z = 1;
     W = 1; t = 0; v = 550; n = 0;
-    isBallistic = true; flipPhase = false;
+    flags = PhotonFlags::isBallistic;
     S = 0;
     pth = nullptr;
 };
@@ -72,20 +86,18 @@ Photon::Photon(const Photon& p) {
     this->mu = p.mu;
     this->W = p.W;
     this->t = p.t;
-    this->isBallistic = p.isBallistic;
+    this->flags = p.flags;
     this->v = p.v;
     this->n = p.n;
     this->S = p.S;
-    this->flipPhase = p.flipPhase;
     this->pth = p.pth;
 }
 
 //Constructor for specific photon direction and position
 Photon::Photon(const vec& x, const vec& mu, double w=1, double t0=0) {
     this->x = x; this->mu = mu;
-    W = w; t = t0; isBallistic = true;
-    v = 0; n = 0; flipPhase = false;
-    S = 0;
+    W = w; t = t0; flags = PhotonFlags::isBallistic;
+    v = 0; n = 0; S = 0;
     pth = nullptr;
 };
 
@@ -106,13 +118,13 @@ void Photon::Scatter(double eps1, double eps2, const Medium& p) {
     //If we're moving very close to +/- Z, the solution simplifies
     double newX, newY, newZ;
     if (abs(mu.Z-1.0) < CONST_EPS) { //Z=1
-        newZ = -cost;
+        newZ = cost;
         newX = sint*cos(eps2*2.0*CONST_PI);
         newY = sint*sin(eps2*2.0*CONST_PI);
     } else if (abs(mu.Z+1.0) < CONST_EPS) { //Z=-1
         newX = sint*cos(eps2*2.0*CONST_PI);
         newY = sint*sin(eps2*2.0*CONST_PI);
-        newZ = cost;
+        newZ = -cost;
     } else {
         newZ = -sqrt(1-pow(mu.Z,2)) * sint 
                 * cos(eps2*2.0*CONST_PI) + mu.Z*cost;
@@ -124,7 +136,7 @@ void Photon::Scatter(double eps1, double eps2, const Medium& p) {
                 / sqrt(1-pow(mu.Z,2)) + mu.X*cost;
     };
     mu = vec(newX, newY, newZ);
-    isBallistic = false;
+    flags = (PhotonFlags) ((int)PhotonFlags::isBallistic | (int)flags);
     
     //Store raypath
     if (pth)
@@ -132,7 +144,7 @@ void Photon::Scatter(double eps1, double eps2, const Medium& p) {
 }
 
 double Photon::phi() const {
-    return cos(v * t) * (flipPhase ? -1 : 1);
+    return cos(v * t) * (((int)flags & (flippedPhase())) ? -1 : 1);
 }
 
 //Math functions
@@ -212,11 +224,10 @@ Photon& Photon::operator=(const Photon& rhs) {
     mu = rhs.mu;
     W = rhs.W;
     t = rhs.t;
-    isBallistic = rhs.isBallistic;
+    flags = rhs.flags;
     v = rhs.v;
     n = rhs.n;
     S = rhs.S;
-    flipPhase = rhs.flipPhase;
     pth = rhs.pth;
     return *this;
 }
@@ -228,11 +239,31 @@ void Photon::storeRayPath(RayPath& path) {
 }
 
 void Photon::printstatus() const {
-    cerr << "Position: " << x << "   Direction: " << mu << "   Weight: " << W << "   RayPath: " << pth << endl;
+    cerr << "Position: " << x << "   Direction: " << mu << "   Weight: " << W << "   RayPath: " << pth << "   n=" << n << "   t=" << t << "   Flags: " << (int)flags << endl;
 }
 
 bool Photon::hasPath() const {
     return (pth != nullptr);
+}
+
+bool Photon::isFluorescence() const {
+    return (int)flags & (int)PhotonFlags::isFluoresce;
+}
+
+bool Photon::isBallistic() const {
+    return (int)flags & (int)PhotonFlags::isBallistic;
+}
+
+bool Photon::flippedPhase() const {
+    return (int)flags & (int)PhotonFlags::flippedPhase;
+}
+
+void Photon::flipPhase() {
+    flags = (PhotonFlags) ( (int)flags ^ (int)PhotonFlags::flippedPhase );
+}
+
+void Photon::clearRayPath() {
+    pth = nullptr;
 }
 
 #endif
