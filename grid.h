@@ -759,7 +759,8 @@ bool Grid::isempty(int id) const {
     else if (sys == CoordinateSystem::Cylindrical)
             k0 = 1;
 
-    //Now loop through and add up values    
+    //Now loop through and add up values
+    k0 = j0 = i0 = 0;
     for (unsigned long int i = i0; i < nx+i0; i++) {
         for (unsigned long int j = j0; j < ny+j0; j++) {
             for (unsigned long int k = k0; k < nz+k0; k++) {
@@ -776,6 +777,7 @@ double Grid::sum(int id) const {
     double out = 0;
     
     //Get search indices
+    k0 = j0 = i0 = 0;
     if (sys == CoordinateSystem::Cartesian)
             i0 = j0 = k0 = 1;
     else if (sys == CoordinateSystem::Cylindrical)
@@ -859,26 +861,26 @@ Grid::iterator Grid::begin() const {
 
 Grid::iterator& Grid::iterator::operator++(int) {
     //Get upper limits
-    unsigned long int kmax = ((g.sys == CoordinateSystem::Spherical) ? g.nz : g.nz+1);
-    unsigned long int jmax = ((g.sys == CoordinateSystem::Cartesian) ? g.ny+1 : g.ny);
-    unsigned long int lmax = ((g.sys == CoordinateSystem::Cartesian) ? g.nx+1 : g.nx);
     unsigned long int kmin = ((g.sys == CoordinateSystem::Spherical) ? 0 : 1);
     unsigned long int jmin = ((g.sys == CoordinateSystem::Cartesian) ? 1 : 0);
     unsigned long int lmin = ((g.sys == CoordinateSystem::Cartesian) ? 1 : 0);
+    unsigned long int kmax = kmin+g.nz;
+    unsigned long int jmax = jmin+g.ny;
+    unsigned long int lmax = lmin+g.nx;
     
     //Increment x first
     ix ++;
-    if (ix == lmax) {
+    if (ix >= lmax) {
         ix = lmin;
         iy ++;
     }
     //If y was incremented
-    if (iy == jmax) {
+    if (iy >= jmax) {
         iy = jmin;
         iz ++;
     }
-    //If z got incremented
-    if (iz == kmax) {
+    //If z was incremented
+    if (iz >= kmax) {
         ix = lmin;
         iy = jmin;
         iz = kmin;

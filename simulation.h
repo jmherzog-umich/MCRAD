@@ -4,6 +4,7 @@
 #include <fstream>
 #include <iostream>
 #include <vector>
+#include <map>
 #include <cmath>
 #include <cstdlib>
 #include <ctime>
@@ -38,7 +39,9 @@ class Simulation {
         void setup();
         void run();
         void genBeam();
-        void genFluor(double Emin);
+        void genFluor();
+        
+        void emitPhoton(const vec& x, double W, double t0);
         
         void print();
         void printstatus(int STEP) const;
@@ -98,10 +101,10 @@ class Simulation {
         
         //Calculated values
         vector<Photon> PHOTONS;
-        vector<Photon> NEWPHOTONS;
+        multimap<double, Photon> NEWPHOTONS;
         vector<RayPath> PATHS;
         unsigned long int storedFpaths = 0;
-        double tsim, tfluor;
+        double tsim, tfluor, Emin;
         
         //Other things to keep track of
         chrono::system_clock::time_point t0;
@@ -176,7 +179,35 @@ void Simulation::genBeam() {
     PHOTONS = beam.sampleBeam(N0);
 }
 
-void Simulation::genFluor(double Emin) {
+void Simulation::emitPhoton(const vec& x, double W0, double t0) {
+    //Calculate direction
+    double eps = 2*roll() - 1;
+    double sint = sin(2*CONST_PI*roll());
+    Photon pt;
+    
+    //Create fluorescence photon
+    pt.x = x;
+    pt.mu = vec(eps * sint, sqrt(1-eps*eps)*sint, sqrt(1-sint*sint));
+    pt.W = W0;
+    pt.t = t0;
+    pt.v = medium.emit_v(roll());
+    pt.S = -log(roll());
+    pt.flags = (Photon::PhotonFlags)5;
+    
+    //Store ray paths of fluorescence data 
+    if (storedFpaths < storepaths) {
+        pt.storeRayPath(PATHS.at(storepaths + storedFpaths));
+        storedFpaths ++;
+    }
+    
+    //Emit the photon in stats
+    if (pt.W < Emin)
+        return;
+    stats.emit(pt, pt.W);
+    NEWPHOTONS.insert({pt.t, pt});
+};
+
+void Simulation::genFluor() {
     //If time-resolved, emit FQY * ABS * (1-exp(-dT/tau)) photons per cell divided into Nf packets (obviously weight > WMIN)
     //-Otherwise, emit all light
     
@@ -185,9 +216,8 @@ void Simulation::genFluor(double Emin) {
     double np = 0;
     double wp = 0;
     double ff;
-    double eps1, eps2, cost, sphi;
     unsigned long int ii;
-    Photon newp;
+    vec x;
     
     //If time-resolved, use dT to determine emission, otherwise emit all
     if ((int)flags & (int)SimFlags::TimeResolved)
@@ -216,40 +246,18 @@ void Simulation::genFluor(double Emin) {
 
         //Loop through packet count, generate, and add to photon vector
         for (int i = 0; i < nf; i ++) {
-        
-            //Roll some dice
-            eps1 = roll();
-            eps2 = roll();
-            cost = 2*eps1 - 1;
-            sphi = sin(2*CONST_PI*eps2);
             
             //Calculate new position, direction, etc.
-            newp.x = grid.rand(ii);
-            newp.mu = vec(cost * sphi, sqrt(1-cost*cost) * sphi, sqrt(1-sphi*sphi));
-            newp.W = wp;
-            if ((int)flags & (int)SimFlags::TimeResolved)
-                newp.t = tsim;
-            else
-                newp.t = tsim + medium.emit_tau(roll());
-            newp.v = medium.emit_v(roll());
-            newp.S = -log(roll());
-            newp.flags = (Photon::PhotonFlags)5;
-            
-            //Store photon path if we have one
-            if (storedFpaths < storepaths) {
-                newp.storeRayPath(PATHS.at(storepaths + storedFpaths));
-                storedFpaths ++;
-            } else //Clear raypath since we don't reset it, otherwise all future fluorescence rays will point to the same one
-                newp.clearRayPath();
-            
-            //Emit the photon in stats
-            stats.emit(newp, newp.W);
-            
-            //Store the photon
-            NEWPHOTONS.push_back(newp);
+            x = grid.rand(ii);
+            emitPhoton(x, wp, tsim);
         }
     }
     tfluor = tsim;
+    
+    //Add to vector 
+    std::transform( NEWPHOTONS.begin(), NEWPHOTONS.end(), back_inserter( PHOTONS ), [](auto &kv){ return kv.second;});
+    NEWPHOTONS.clear();
+    
 }
 
 void Simulation::printsettings() const {
@@ -413,8 +421,14 @@ void Simulation::printstatus(int STEP) const {
     
     //Photons and energy
     cerr << setw(9) << PHOTONS.size();
-    cerr << "+" << setw(9) << NEWPHOTONS.size() << " ";
-    cerr << setw(10) << scientific << setprecision(3) << grid.sum(4);
+    if ((int)flags & (int)SimFlags::Fluorescence)
+        cerr << "+" << setw(9) << NEWPHOTONS.size();
+    else
+        cerr << "          ";
+    if ((int)flags & (int)SimFlags::Fluorescence)
+        cerr << " " << setw(10) << scientific << setprecision(3) << grid.sum(4);
+    else
+        cerr << " " << setw(10) << scientific << setprecision(3) << grid.sum(0);
     
     //And finally new line
     cerr << endl;
@@ -444,7 +458,7 @@ void Simulation::run() {
     
     //Some default values just in case
     double n = medium.n();
-    double Emin = Wmin * beam.E;
+    Emin = Wmin * beam.E;
     m = 1;
     
     //loop through steps
@@ -495,43 +509,20 @@ void Simulation::run() {
                         //Roll to determine scatter or absorb
                         eps = roll();
                         if (eps < ka/k) { //Absorb
-                            //Calculate statis
+                            //Calculate stats
                             grid.at((PHOTONS.at(i).isFluorescence()?2:0), ii,jj,kk) += PHOTONS.at(i).W;
-                            if (((int)flags & (int)SimFlags::Fluorescence) and !PHOTONS.at(i).isFluorescence())
-                                grid.at(4, ii,jj,kk) += PHOTONS.at(i).W;
                             stats.absorb(PHOTONS.at(i), PHOTONS.at(i).W);
                             
                             //Generate fluorescence photons
-                            if ((int)flags & (int)SimFlags::Fluorescence) {
-                                
-                                //Calculate direction
-                                eps = 2*roll() - 1;
-                                sint = sin(2*CONST_PI*roll());
-                                
-                                //Create fluorescence photon
-                                pt.x = PHOTONS.at(i).x;
-                                pt.mu = vec(eps * sint, sqrt(1-eps*eps)*sint, sqrt(1-sint*sint));
-                                pt.W = PHOTONS.at(i).W * medium.FQY();
-                                pt.t = PHOTONS.at(i).t + medium.emit_tau(roll());
-                                pt.v = medium.emit_v(roll());
-                                pt.S = -log(roll());
-                                pt.flags = (Photon::PhotonFlags)5;
-                                
-                                //Store ray paths of fluorescence data 
-                                if (storedFpaths < storepaths) {
-                                    pt.storeRayPath(PATHS.at(storepaths + storedFpaths));
-                                    storedFpaths ++;
-                                } else
-                                    pt.clearRayPath();
-                                
-                                //Emit the photon in stats
-                                stats.emit(pt, pt.W);
-                                NEWPHOTONS.push_back(pt);
+                            if (((int)flags & (int)SimFlags::Fluorescence) && (!PHOTONS.at(i).isFluorescence())) {
+                                grid.at(4, ii,jj,kk) += PHOTONS.at(i).W;
+                                emitPhoton(PHOTONS.at(i).x, PHOTONS.at(i).W * medium.FQY(), tsim + medium.emit_tau(roll()));
                             }
                             
                             //And kill the photon
                             PHOTONS.at(i).W = -1;
                             PHOTONS.at(i).S = 0;
+                            break;
                             
                         } else { //Scatter
                             grid.at((PHOTONS.at(i).isFluorescence()?3:1), ii,jj,kk) += PHOTONS.at(i).W;
@@ -768,30 +759,26 @@ void Simulation::run() {
             if ((int)flags & (int)SimFlags::TimeResolved) {
                 //Branch based on single- or multi-photon packets
                 //For single photons, copy into simulation when we reach the emission time
-                if ((int)flags & (int)SimFlags::SinglePhoton)  {
-                    for (unsigned long int zi = NEWPHOTONS.size()-1; zi >= 0 ; zi -- )
-                        if (NEWPHOTONS.at(zi).t <= tsim+dT) {       //TODO: MAKE THIS MORE EFFICIENT, MAYBE BY KEEPING NEWPHOTONS SORTED
-                            PHOTONS.push_back(NEWPHOTONS.at(zi));
-                            NEWPHOTONS.erase(NEWPHOTONS.begin()+zi);
-                        }
+                if ((int)flags & (int)SimFlags::SinglePhoton) {
+                    if (NEWPHOTONS.size() > 0) {
+                        auto upper = NEWPHOTONS.lower_bound(tsim+dT);
+                        auto lower = NEWPHOTONS.upper_bound(0);
+                        std::transform( lower, upper, back_inserter( PHOTONS ), [](auto &kv){ return kv.second;});
+                        NEWPHOTONS.erase(lower, upper);
+                    }
+                }
                         
                 //Otherwise, generate packets based on fraction of light emitted within this time step
-                } else if (tsim - tfluor >= dTf) {
-                    genFluor(Emin);
-                    PHOTONS.insert(PHOTONS.end(), NEWPHOTONS.begin(), NEWPHOTONS.end());
-                    NEWPHOTONS.clear();
-                }
+                else if (tsim - tfluor >= dTf)
+                    genFluor();
                 
             //-Static version: immediately add photons in single-photon mode, add when out of primary photons otherwise
             } else {
                 if ((int)flags & (int)SimFlags::SinglePhoton) {
-                    PHOTONS.insert(PHOTONS.end(), NEWPHOTONS.begin(), NEWPHOTONS.end());
+                    std::transform( NEWPHOTONS.begin(), NEWPHOTONS.end(), back_inserter( PHOTONS ), [](auto &kv){ return kv.second;});
                     NEWPHOTONS.clear();
-                } else if (PHOTONS.size() == 0) {
-                    genFluor(Emin);
-                    PHOTONS.insert(PHOTONS.end(), NEWPHOTONS.begin(), NEWPHOTONS.end());
-                    NEWPHOTONS.clear();
-                }
+                } else if (PHOTONS.size() == 0)
+                    genFluor();
             }
         }
         
@@ -822,13 +809,8 @@ void Simulation::run() {
                     if (NEWPHOTONS.size() == 0)
                         END = true;
                     //Otherwise incrememnt to the next photon emission time
-                    else {
-                        tsim = NEWPHOTONS.at(0).t;
-                        for (unsigned long int zi = 1; zi < NEWPHOTONS.size(); zi ++ ) {
-                            if (tsim > NEWPHOTONS.at(zi).t)
-                                tsim = NEWPHOTONS.at(zi).t;
-                        }
-                    }
+                    else
+                        tsim = NEWPHOTONS.begin()->first;
                 }
                 //Time-resolved and packet mode, so check if we have particles left in the excited state
                 else {

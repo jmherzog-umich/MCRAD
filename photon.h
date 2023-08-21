@@ -62,7 +62,8 @@ struct Photon {
         double muR() const;
         double intersectR(double R) const;
         double intersectXY(double R, bool& xy) const;
-        bool operator<(const Photon& rhs) const;  
+        bool operator<(const Photon& rhs) const;
+        bool operator<(double rhs) const;
         Photon& operator=(const Photon& rhs);
         
         private:
@@ -217,6 +218,10 @@ double Photon::intersectR(double R) const {
 
 bool Photon::operator<(const Photon& rhs) const {
     return this->t < rhs.t;
+}
+
+bool Photon::operator<(double t) const {
+    return this->t < t;
 }
 
 Photon& Photon::operator=(const Photon& rhs) {

@@ -759,6 +759,8 @@ void Stats::print() const {
     cout << "1 - (Rd + Rs + Td + A + Ld)   ?=  0  =  " << 1-(Rdiffuse + Rspec + Tdiffuse + ADEP + Ldiffuse) / PHI << endl;
     if (FGEN > CONST_EPS)
         cout << "Fg - (Ff + Fb + Fl + Fa)      ?=  0  =  " << (FGEN - Ff - Fb - Fl - FDEP) / PHI << endl;
+    if (FGEN > CONST_EPS)
+        cout << "Fg / Fabs   =  " << FGEN / ADEP << endl;
     
     //Reflection time/order
     cout << endl << endl;

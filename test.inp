@@ -15,10 +15,10 @@ phase 0
 backwall 1
 frontwall 1
 sidewall 1
-cartesian 1
+cartesian 0
 fluorescence 1
-timedependent 1
-singlephoton 1
+timedependent 0
+singlephoton 0
 beamprofile 1
 pathbasefilename test
 genBeam
