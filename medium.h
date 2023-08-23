@@ -1,5 +1,7 @@
 #include <cmath>
 #include <iostream>
+#include <fstream>
+#include <iomanip>
 
 #ifndef _MEDIUM_H_
 #define _MEDIUM_H_
@@ -36,6 +38,8 @@ struct Medium {
     CrossSectionModel xc;       //Phase function to use for calculation
     
     void print() const;
+    void writedbheader(ofstream& OF) const;
+    void writedb(ofstream& OF) const;
     
     double dens() const;
     double FQY() const;
@@ -229,6 +233,30 @@ double Medium::emit_tau(double eps, double l) const {
 
 double Medium::emit_v(double eps, double l) const {
     return _f;
+}
+
+void Medium::writedbheader(ofstream& OF) const {
+    OF << "n,dens,phaseFxn,g,Ss,Sa,a";
+}
+
+void Medium::writedb(ofstream& OF) const {
+    OF << setprecision(8) << n() << ",";
+    OF << setprecision(8) << dens() << ",";
+    switch (phase) {
+        case PhaseFunction::HenyeyGreenstein : 
+            OF << "Henyey-Greenstein,";
+            break;
+        case PhaseFunction::Rayleigh :
+            OF << "Rayleigh,";
+            break;
+        case PhaseFunction::Draine :
+            OF << "Draine,";
+            break;
+    }
+    OF << scientific << setprecision(8) << g() << ",";
+    OF << scientific << setprecision(8) << Ss() << ",";
+    OF << scientific << setprecision(8) << Sa() << ",";
+    OF << scientific << setprecision(8) << albedo();
 }
 
 #endif

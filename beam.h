@@ -45,6 +45,9 @@ struct Beam {
     Beam();
     void print() const;
     
+    void writedbheader(ofstream& OF) const;
+    void writedb(ofstream& OF) const;
+    
     vector<Photon> sampleBeam(unsigned long int N);
 };
 
@@ -267,6 +270,14 @@ vector<Photon> Beam::sampleBeam(unsigned long int N0) {
         PHOTONS.at(i).mu = PHOTONS.at(i).mu * x + PHOTONS.at(i).mu.perp(eps2) * sqrt(1.0-x*x);
     }
     return PHOTONS;
+}
+
+void Beam::writedbheader(ofstream& OF) const {
+    OF << "E";
+}
+
+void Beam::writedb(ofstream& OF) const {
+    OF << scientific << setprecision(8) << E;
 }
 
 #endif

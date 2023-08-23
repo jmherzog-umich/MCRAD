@@ -1,6 +1,8 @@
 #include <cmath>
 #include <random>
 #include <ctime>
+#include <string>
+#include <cstdint>
 
 #define FP_FAST_FMA
 
@@ -58,6 +60,16 @@ float erfinvf (float a)
     }
     r = a * p;
     return r;
+}
+
+string bitstring(uint_least16_t v) {
+    string out;
+    for (int i = 0; i < 16; i ++)
+        if ( v & (1 << i) )
+            out.push_back('1');
+        else
+            out.push_back('0');
+    return out;
 }
 
 #endif

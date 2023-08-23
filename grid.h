@@ -479,6 +479,10 @@ void Grid::print() const {
     
     //Now loop through and print the grid
     for (unsigned long int i = 0; i < m.size(); i ++) {
+        //Don't print if the grid is empty
+        if (isempty(i))
+            continue;
+    
         //print Key
         switch (sys) {
             case CoordinateSystem::Cartesian:

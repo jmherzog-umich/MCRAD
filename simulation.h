@@ -35,11 +35,12 @@ using namespace std;
 class Simulation {
     public:
         Simulation();
-        void load(const string& fname);
+        void load(const string& fname, int argc, char** argv);
         void setup();
         void run();
         void genBeam();
         void genFluor();
+        void exec(int argc, char** argv);
         
         void emitPhoton(const vec& x, double W, double t0);
         
@@ -47,6 +48,10 @@ class Simulation {
         void printstatus(int STEP) const;
         void printstatusheader() const;
         void printsettings() const;
+        
+        void write(string s) const;
+        void writedb(ofstream& OF) const;
+        void writedbheader(ofstream& OF) const;
         
         enum struct SimFlags {
             BackWall      = 0b000000000001,     //Whether there is a backwall in the simulation or semi-infinite
@@ -105,6 +110,9 @@ class Simulation {
         vector<RayPath> PATHS;
         unsigned long int storedFpaths = 0;
         double tsim, tfluor, Emin;
+        
+        //Output settings
+        string dbfile;
         
         //Other things to keep track of
         chrono::system_clock::time_point t0;
@@ -865,9 +873,9 @@ void Simulation::run() {
     cout<<"Calculation complete in "<<STEP-1<<" steps ("<<maxstep<<" allowed)"<<endl<<endl;
 }
 
-void Simulation::load(const string& fname) {
+void Simulation::load(const string& fname, int argc, char** argv) {
         //Allocate some memory and open the file
-        string cmd, key;
+        string cmd, key, tmpstring;
         stringstream cmdstr;
         ifstream ifile(fname);
         int tmpint, tmpflags = (int)flags;
@@ -929,6 +937,8 @@ void Simulation::load(const string& fname) {
                 cmdstr >> Wmin;
             else if (!key.compare("maxstep"))
                 cmdstr >> maxstep;
+            else if (!key.compare("dbfile"))
+                cmdstr >> dbfile;
             else if (!key.compare("printsteps"))
                 cmdstr >> printSteps;
             else if (!key.compare("trackphoton"))
@@ -1038,8 +1048,13 @@ void Simulation::load(const string& fname) {
                 genBeam();
             else if (!key.compare("print"))
                 print();
-                
-            else
+            else if (!key.compare("write")) {
+                cmdstr >> tmpstring;
+                write(tmpstring);
+            } else if (!key.compare("exec")) {
+                exec(argc, argv);
+                return; //Exit here
+            } else
                 cerr << "Unknown input option: " << cmd << endl;
                 
             //Clear values
@@ -1051,6 +1066,71 @@ void Simulation::load(const string& fname) {
         //Close file
         ifile.close();
         return;
+}
+
+void Simulation::writedbheader(ofstream& OF) const {
+    OF << "N0,L,R,dT,dTf,flags,n0,nx,nr";
+}
+
+void Simulation::writedb(ofstream& OF) const {
+    OF << setprecision(8) << N0 << ",";
+    OF << setprecision(8) << L << ",";
+    OF << setprecision(8) << R << ",";
+    OF << setprecision(8) << dT << ",";
+    OF << setprecision(8) << dTf << ",";
+    OF << setprecision(8) << bitstring((unsigned short)flags) << ",";
+    OF << setprecision(8) << n0 << ",";
+    OF << setprecision(8) << nx << ",";
+    OF << setprecision(8) << nr;
+}
+
+
+void Simulation::write(string s) const {
+    //Check if string is empty
+    if (s.empty()) {
+        s = dbfile;
+        if (s.empty())
+            return;
+    }
+    
+    //Open file in append mode
+    ofstream OF(s, ios_base::app);
+    
+    //If file is empty, write a header
+    if (OF.tellp() == 0) {
+        writedbheader(OF);
+        OF << ",";
+        beam.writedbheader(OF);
+        OF << ",";
+        medium.writedbheader(OF);
+        OF << ",";
+        stats.writedbheader(OF);
+        OF << endl;
+    }
+    
+    //Now write the row
+    writedb(OF);
+    OF << ",";
+    beam.writedb(OF);
+    OF << ",";
+    medium.writedb(OF);
+    OF << ",";
+    stats.writedb(OF);
+    OF << endl;
+    
+    //Close file
+    OF.close();
+}
+
+void Simulation::exec(int argc, char** argv) {
+    //TODO: PARSE argc, argv
+    
+    //Now generate beam, setup, etc., and run the program 
+    genBeam();
+    setup();
+    run();
+    print();
+    write("");
 }
 
 #endif

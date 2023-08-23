@@ -33,7 +33,7 @@ int main(int argc, char** argv) {
     //Check if we have an  input file
     if (argc > 1) {
         //Read file
-        I.load(argv[1]);
+        I.load(argv[1], argc-1, argv+sizeof(char));
     } else {
         //Run simulation
         I.genBeam();

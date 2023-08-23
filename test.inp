@@ -1,5 +1,5 @@
 Ss 1
-Sa 1
+Sa 0
 N0 5000000
 Rres 20
 Zres 20
@@ -9,8 +9,8 @@ dens 0.5
 R 1000
 L 100
 dT 0.01
-Rb 500
-Rbmax 1000
+Rb 0
+Rbmax 1
 phase 0
 backwall 1
 frontwall 1
@@ -18,10 +18,7 @@ sidewall 1
 cartesian 0
 fluorescence 1
 timedependent 0
-singlephoton 0
+singlephoton 1
 beamprofile 1
 pathbasefilename test
-genBeam
-setup
-run
-print
+exec

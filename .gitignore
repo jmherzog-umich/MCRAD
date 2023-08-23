@@ -199,3 +199,11 @@ cython_debug/
 *.exe
 *.out
 *.app
+
+#Other generated files
+*.gnu
+*.xyz
+*.out
+*.jpg
+*.png
+*.csv
