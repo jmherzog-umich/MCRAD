@@ -104,7 +104,7 @@ void Camera::image(Photon& p, double n) {
         return;
     if (interfere) {
         if (subjective) {
-            ri = sqrt(xi*xi + yi*yi);
+            ri = hypot(xi,yi);
             si = sqrt(Si()*Si() + pow(ri*(1.0-M)/M - So * sqrt(1-ct*ct)/ct, 2));
             p.t += (sl + si) / CONST_C * n;
         }

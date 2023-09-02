@@ -74,11 +74,11 @@ struct vec {
 
         //Math
         double norm() const {
-            return sqrt(X*X + Y*Y + Z*Z);
+            return hypot(X,Y,Z);
         };
         
         double r() const {
-            return sqrt(X*X + Y*Y);
+            return hypot(X,Y);
         };
         
         double r2() const {
@@ -91,21 +91,21 @@ struct vec {
             double d, den;
             if ((abs(Z) >= abs(X)) and (abs(Z) >= abs(Y))) {
                 d = X * cost + Y * sint;
-                den = sqrt(Z*Z + d*d);
+                den = hypot(Z,d);
                 return vec(Z*cost / den, Z*sint / den, -d / den);
             } else if ((abs(Y) >= abs(X)) and (abs(Y) >= abs(Z))) {
                 d = X * cost + Z * sint;
-                den = sqrt(Y*Y + d*d);
+                den = hypot(Y,d);
                 return vec(Y*cost / den, -d / den, Y*sint / den);
             } else {
                 d = Z * cost + Y * sint;
-                den = sqrt(X*X + d*d);
+                den = hypot(X,d);
                 return vec(-d / den, X*sint / den, X*cost / den);
             }
         };
         
         double costheta() const {
-            return X/sqrt(X*X+Y*Y);
+            return X/hypot(X,Y);
         };
         
         double cosphi() const {

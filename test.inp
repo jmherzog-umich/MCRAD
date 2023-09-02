@@ -5,9 +5,9 @@ Rres 20
 Zres 20
 THres 20
 Tres 200
-dens 0.5
+dens 0.0005
 R 1000
-L 100
+L 10000
 dT 0.01
 Rb 0
 Rbmax 1
@@ -19,6 +19,8 @@ cartesian 0
 fluorescence 1
 timedependent 0
 singlephoton 1
-beamprofile 1
+beamprofile 0
+beamspread 1
+dbfile test.csv
 pathbasefilename test
 exec

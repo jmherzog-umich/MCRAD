@@ -41,6 +41,8 @@ struct Medium {
     void writedbheader(ofstream& OF) const;
     void writedb(ofstream& OF) const;
     
+    bool set(const string& key, const string& val);
+    
     double dens() const;
     double FQY() const;
     double g(double l = 0) const;
@@ -228,7 +230,7 @@ double Medium::pscatter(double cost, double l) const {
 }
 
 double Medium::emit_tau(double eps, double l) const {
-    return _tau * -log(eps);
+    return _tau * eps;
 }
 
 double Medium::emit_v(double eps, double l) const {
@@ -257,6 +259,28 @@ void Medium::writedb(ofstream& OF) const {
     OF << scientific << setprecision(8) << Ss() << ",";
     OF << scientific << setprecision(8) << Sa() << ",";
     OF << scientific << setprecision(8) << albedo();
+}
+
+bool Medium::set(const string& key, const string& val) {
+    if (!key.compare("Ss"))
+        _Ss = stod(val);
+    else if (!key.compare("Sa"))
+        _Sa = stod(val);
+    else if (!key.compare("g"))
+        _g = stod(val);
+    else if (!key.compare("g2"))
+        _g2 = stod(val);
+    else if (!key.compare("n"))
+        _n = stod(val);
+    else if (!key.compare("dens"))
+        _dens = stod(val);
+    else if (!key.compare("FQY"))
+        _FQY = stod(val);
+    else if (!key.compare("phase"))
+        phase = (Medium::PhaseFunction)stoul(val);
+    else
+        return false;
+    return true;
 }
 
 #endif

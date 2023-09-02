@@ -198,7 +198,7 @@ void Stats::emit(const Photon& p, double W) {
 void Stats::absorb(const Photon& p, double W) {
     //Initialize
     double t = p.t;
-    const vec x = p.x;
+    const vec& x = p.x;
     int binT;
     
     //Calculate moments

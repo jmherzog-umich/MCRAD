@@ -84,9 +84,9 @@ struct Grid {
     void print() const;
     
     Grid();
-    Grid(double x, double y, double z, int nx, int ny, int nz);
-    Grid(double r, double z, int nr, int ntheta, int nz);
-    Grid(double r, int nr, int ntheta, int nphi);
+    Grid(double x, double y, double z, unsigned int nx, unsigned int ny, unsigned int nz);
+    Grid(double r, double z, unsigned int nr, unsigned int ntheta, unsigned int nz);
+    Grid(double r, unsigned int nr, unsigned int ntheta, unsigned int nphi);
     
 };
 
@@ -96,7 +96,7 @@ Grid::Grid() {
     nx = ny = nz = 20;
 }
 
-Grid::Grid(double x, double y, double z, int nx=20, int ny=0, int nz=0) {
+Grid::Grid(double x, double y, double z, unsigned int nx=20, unsigned int ny=0, unsigned int nz=0) {
     //Initialize a spherical grid
     Lx = x; Ly = y; Lz = z;
     sys = CoordinateSystem::Cartesian;
@@ -105,7 +105,7 @@ Grid::Grid(double x, double y, double z, int nx=20, int ny=0, int nz=0) {
     this->nz = (nz > 0) ? nz : nx;
 }
 
-Grid::Grid(double r, double z, int nr=20, int ntheta=0, int nz=0) {
+Grid::Grid(double r, double z, unsigned int nr=20, unsigned int ntheta=0, unsigned int nz=0) {
     //Initialize a spherical grid
     Lx = r; Lz = z; Ly = 0;
     sys = CoordinateSystem::Cylindrical;
@@ -114,7 +114,7 @@ Grid::Grid(double r, double z, int nr=20, int ntheta=0, int nz=0) {
     this->nz = (nz > 0) ? nz : nr;
 }
 
-Grid::Grid(double r, int nr=20, int ntheta=0, int nphi=0) {
+Grid::Grid(double r, unsigned int nr=20, unsigned int ntheta=0, unsigned int nphi=0) {
     //Initialize a spherical grid
     Lx = r; Ly = Lz = 0;
     sys = CoordinateSystem::Spherical;

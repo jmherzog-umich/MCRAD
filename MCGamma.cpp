@@ -14,6 +14,10 @@
 #include "simulation.h"
 #include "utility.h"
 
+#if _DEBUG
+#include <fenv.h> 
+#endif
+
 using namespace std;
 
 ///
@@ -22,6 +26,10 @@ using namespace std;
 //     Units - nm, nm2, nm3, ns
 ///
 int main(int argc, char** argv) {
+    
+    #if _DEBUG
+    feenableexcept(FE_INVALID | FE_OVERFLOW);
+    #endif
     
     //Initialize random number generator and some other things
     rand_init();
@@ -33,12 +41,9 @@ int main(int argc, char** argv) {
     //Check if we have an  input file
     if (argc > 1) {
         //Read file
-        I.load(argv[1], argc-1, argv+sizeof(char));
+        I.load(argv[1], argc-2, argv+2*sizeof(char));
     } else {
         //Run simulation
-        I.genBeam();
-        I.setup();
-        I.run();
-        I.print();
+        I.exec(0, nullptr);
     }
 };

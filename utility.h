@@ -5,6 +5,7 @@
 #include <cstdint>
 
 #define FP_FAST_FMA
+#define CONST_EPS 1e-10
 
 #ifndef _UTILITY_H_
 #define _UTILITY_H_
@@ -15,20 +16,34 @@ using namespace std;
 namespace {
     default_random_engine _GEN;
     uniform_real_distribution<double> _DIST;
+    uniform_real_distribution<float> _DISTF;
+    exponential_distribution<double> _LOG;
 }
 
 //Methods
 void rand_init() {
     _GEN.seed(time(0));
     _DIST = uniform_real_distribution<double>(0.0,1.0);
+    _DISTF = uniform_real_distribution<float>(0.0,1.0);
+    _LOG = exponential_distribution<double>(1.0);
 }
 
 double roll() {
-    double eps = 0;
-    while (eps == 0 || eps == 1) {
+    double eps = _DIST(_GEN);
+    while (eps == 1.0)
         eps = _DIST(_GEN);
-    }
     return eps;
+}
+
+float rollf() {
+    float eps = _DISTF(_GEN);
+    while (eps == 1.0)
+        eps = _DISTF(_GEN);
+    return eps;
+}
+
+double logroll() {
+    return _LOG(_GEN);
 }
 
 float erfinvf (float a)

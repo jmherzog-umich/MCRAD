@@ -41,6 +41,7 @@ class Simulation {
         void genBeam();
         void genFluor();
         void exec(int argc, char** argv);
+        bool set(const string &key, const string& val);
         
         void emitPhoton(const vec& x, double W, double t0);
         
@@ -72,7 +73,7 @@ class Simulation {
         double nr=1.600;                //Refractive index of outer radial surface (glass)
         
         //Sample info
-        int N0 = 5e6;                   //Number of initial photon groups
+        unsigned long int N0 = 5e6;     //Number of initial photon groups
         double L=1e4;                   //Length of sample [um]
         double R=1e4;                   //Radius of sample [um]
         double dT=1;                    //Time step in simulation
@@ -95,12 +96,12 @@ class Simulation {
         unsigned int maxstep = 5e6;     //Maximum number of steps before terminating program
         
         //Stats settings
-        int Zres = 20;
-        int Rres = 20;
-        int Tres = 20;
-        int THres = 10;
-        int momentlvl = 4;
-        int printSteps = 0;
+        unsigned int Zres = 20;
+        unsigned int Rres = 20;
+        unsigned int Tres = 20;
+        unsigned int THres = 10;
+        unsigned int momentlvl = 4;
+        unsigned int printSteps = 0;
         unsigned long int trackPhoton = 0;
         unsigned long int storepaths = 50;
         
@@ -183,8 +184,9 @@ void Simulation::print() {
 
 void Simulation::genBeam() {
     //Alert the user
-    cerr << "Generating incident beam photons..." << endl;
+    cerr << "Generating incident beam photons...";
     PHOTONS = beam.sampleBeam(N0);
+    cerr << "done!" << endl;
 }
 
 void Simulation::emitPhoton(const vec& x, double W0, double t0) {
@@ -199,7 +201,7 @@ void Simulation::emitPhoton(const vec& x, double W0, double t0) {
     pt.W = W0;
     pt.t = t0;
     pt.v = medium.emit_v(roll());
-    pt.S = -log(roll());
+    pt.S = logroll();
     pt.flags = (Photon::PhotonFlags)5;
     
     //Store ray paths of fluorescence data 
@@ -380,7 +382,7 @@ void Simulation::setup() {
         //Reflect photons at interface
         R = stats.initialize(PHOTONS.at(i), n0/medium.n(PHOTONS.at(i).v));
         PHOTONS.at(i).W *= (1-R);
-        PHOTONS.at(i).S = -log(roll());
+        PHOTONS.at(i).S = logroll();
         
         //Generate raypath objects if needed
         if (i < storepaths)
@@ -481,7 +483,7 @@ void Simulation::run() {
         done = false;
         
         //Loop through each photon and update (go forward to delete if needed)
-        for (unsigned int i = 0; true; i ++) {   //Don't check vector size cause it will change
+        for (unsigned long int i = 0; true; i ++) {   //Don't check vector size cause it will change
         
             //Check that it's a good vector
             if (i >= PHOTONS.size())             //Exit if we've covered the whole vector
@@ -524,7 +526,7 @@ void Simulation::run() {
                             //Generate fluorescence photons
                             if (((int)flags & (int)SimFlags::Fluorescence) && (!PHOTONS.at(i).isFluorescence())) {
                                 grid.at(4, ii,jj,kk) += PHOTONS.at(i).W;
-                                emitPhoton(PHOTONS.at(i).x, PHOTONS.at(i).W * medium.FQY(), tsim + medium.emit_tau(roll()));
+                                emitPhoton(PHOTONS.at(i).x, PHOTONS.at(i).W * medium.FQY(), tsim + medium.emit_tau(logroll()));
                             }
                             
                             //And kill the photon
@@ -536,7 +538,7 @@ void Simulation::run() {
                             grid.at((PHOTONS.at(i).isFluorescence()?3:1), ii,jj,kk) += PHOTONS.at(i).W;
                             stats.scatter(PHOTONS.at(i), PHOTONS.at(i).W);
                             PHOTONS.at(i).Scatter(roll(), roll(), medium);
-                            PHOTONS.at(i).S = -log(roll());
+                            PHOTONS.at(i).S = logroll();
                         }
                     } else {
                         //Update grids
@@ -552,7 +554,7 @@ void Simulation::run() {
                         //-update photon properties
                         PHOTONS.at(i).W *= ks/k;
                         PHOTONS.at(i).Scatter(roll(), roll(), medium);
-                        PHOTONS.at(i).S = -log(roll());
+                        PHOTONS.at(i).S = logroll();
                     }
                 }
             
@@ -714,6 +716,7 @@ void Simulation::run() {
                             //Kill photon
                             PHOTONS.at(i).W = -1;
                             PHOTONS.at(i).S = 0;
+                            break;
                         }
                     } else {
                         //Increment images
@@ -751,7 +754,7 @@ void Simulation::run() {
             }
             
             //Terminate old packets
-            if (PHOTONS.at(i).W <= Emin) {
+            if (PHOTONS.at(i).W<=Emin && PHOTONS.at(i).W>0) {
                 eps = roll();
                 if (eps <= Wm)
                     PHOTONS.at(i).W /= Wm;
@@ -873,13 +876,138 @@ void Simulation::run() {
     cout<<"Calculation complete in "<<STEP-1<<" steps ("<<maxstep<<" allowed)"<<endl<<endl;
 }
 
+bool Simulation::set(const string &key, const string& val) {
+    //Temporary variables
+    bool tmpbool = false;
+    unsigned long int tmpflags = (unsigned long int)flags;
+
+    //Run through the giant list of parameters to check - return true if we set one, otherwise false
+    
+    //Test Medium subclass first
+    tmpbool = medium.set(key, val);
+    if (tmpbool)
+        return true;
+        
+    //And the beam subclass
+    tmpbool = beam.set(key, val);
+    if (tmpbool)
+        return true;
+    
+    //If we're here, the key either belongs to Simulation or doesn't exist
+    if (!key.compare("n0"))
+        n0 = stod(val);
+    else if (!key.compare("nx"))
+        nx = stod(val);
+    else if (!key.compare("nr"))
+        nr = stod(val);
+    else if (!key.compare("N0"))
+        N0 = stoul(val);
+    else if (!key.compare("L"))
+        L = stod(val);
+    else if (!key.compare("R"))
+        R = stod(val);
+    else if (!key.compare("dT"))
+        dT = stod(val);
+    else if (!key.compare("Wm"))
+        Wm = stod(val);
+    else if (!key.compare("Wmin"))
+        Wmin = stod(val);
+    else if (!key.compare("maxstep"))
+        maxstep = stoul(val);
+    else if (!key.compare("dbfile"))
+        dbfile = val;
+    else if (!key.compare("printsteps"))
+        printSteps = stoul(val);
+    else if (!key.compare("trackphoton"))
+        trackPhoton = stoul(val);
+    else if (!key.compare("exportpaths"))
+        storepaths = stoul(val);
+    else if (!key.compare("pathbasefilename"))
+        RayPath::ofbasename = val;
+    else if (!key.compare("Zres"))
+        Zres = stoul(val);
+    else if (!key.compare("Rres"))
+        Rres = stoul(val);
+    else if (!key.compare("Tres"))
+        Tres = stoul(val);
+    else if (!key.compare("THres"))
+        THres = stoul(val);
+    else if (!key.compare("moments"))
+        momentlvl = stoul(val);
+    else if (!key.compare("backwall")) {
+        tmpbool = stoi(val);
+        if (tmpbool)
+            tmpflags |= (int)SimFlags::BackWall;
+        else
+            tmpflags &= ~((int)SimFlags::BackWall);
+        flags = (SimFlags) tmpflags;
+    } else if (!key.compare("frontwall")) {
+        tmpbool = stoi(val);
+        if (tmpbool)
+            tmpflags |= (int)SimFlags::FrontWall;
+        else
+            tmpflags &= ~((int)SimFlags::FrontWall);
+        flags = (SimFlags) tmpflags;
+    } else if (!key.compare("sidewall")) {
+        tmpbool = stoi(val);
+        if (tmpbool)
+            tmpflags |= (int)SimFlags::RadialWall;
+        else
+            tmpflags &= ~((int)SimFlags::RadialWall);
+        flags = (SimFlags) tmpflags;
+    } else if (!key.compare("interference")) {
+        tmpbool = stoi(val);
+        if (tmpbool)
+            tmpflags |= (int)SimFlags::Interference;
+        else
+            tmpflags &= ~((int)SimFlags::Interference);
+        flags = (SimFlags) tmpflags;
+    } else if (!key.compare("saturation")) {
+        tmpbool = stoi(val);
+        if (tmpbool)
+            tmpflags |= (int)SimFlags::Saturation;
+        else
+            tmpflags &= ~((int)SimFlags::Saturation);
+        flags = (SimFlags) tmpflags;
+    } else if (!key.compare("singlephoton")) {
+        tmpbool = stoi(val);
+        if (tmpbool)
+            tmpflags |= (int)SimFlags::SinglePhoton;
+        else
+            tmpflags &= ~((int)SimFlags::SinglePhoton);
+        flags = (SimFlags) tmpflags;
+    } else if (!key.compare("timedependent")) {
+        tmpbool = stoi(val);
+        if (tmpbool)
+            tmpflags |= (int)SimFlags::TimeResolved;
+        else
+            tmpflags &= ~((int)SimFlags::TimeResolved);
+        flags = (SimFlags) tmpflags;
+    } else if (!key.compare("fluorescence")) {
+        tmpbool = stoi(val);
+        if (tmpbool)
+            tmpflags |= (int)SimFlags::Fluorescence;
+        else
+            tmpflags &= ~((int)SimFlags::Fluorescence);
+        flags = (SimFlags) tmpflags;
+    } else if (!key.compare("cartesian")) {
+        tmpbool = stoi(val);
+        if (tmpbool)
+            tmpflags |= (int)SimFlags::Cartesian;
+        else
+            tmpflags &= ~((int)SimFlags::Cartesian);
+        flags = (SimFlags) tmpflags;
+    } else
+        return false;
+    return true;
+}
+
 void Simulation::load(const string& fname, int argc, char** argv) {
         //Allocate some memory and open the file
-        string cmd, key, tmpstring;
+        string cmd, key, val;
         stringstream cmdstr;
         ifstream ifile(fname);
-        int tmpint, tmpflags = (int)flags;
-        bool tmpbool;
+        bool done;
         
         //Process line by line
         while (!ifile.eof()) {
@@ -887,160 +1015,19 @@ void Simulation::load(const string& fname, int argc, char** argv) {
             getline(ifile, cmd);
             cmdstr.str(cmd);
             cmdstr >> key;
+            cmdstr >> val;
             
-            //Store value
-            if (!key.compare("Ss"))
-                cmdstr >> medium._Ss;
-            else if (!key.compare("Sa"))
-                cmdstr >> medium._Sa;
-            else if (!key.compare("g"))
-                cmdstr >> medium._g;
-            else if (!key.compare("g2"))
-                cmdstr >> medium._g2;
-            else if (!key.compare("n0"))
-                cmdstr >> n0;
-            else if (!key.compare("n"))
-                cmdstr >> medium._n;
-            else if (!key.compare("nx"))
-                cmdstr >> nx;
-            else if (!key.compare("nr"))
-                cmdstr >> nr;
-            else if (!key.compare("E"))
-                cmdstr >> beam.E;
-            else if (!key.compare("sin0"))
-                cmdstr >> beam.sin0;
-            else if (!key.compare("N0"))
-                cmdstr >> N0;
-            else if (!key.compare("dens"))
-                cmdstr >> medium._dens;
-            else if (!key.compare("L"))
-                cmdstr >> L;
-            else if (!key.compare("R"))
-                cmdstr >> R;
-            else if (!key.compare("dT"))
-                cmdstr >> dT;
-            else if (!key.compare("Rb"))
-                cmdstr >> beam.Rb;
-            else if (!key.compare("Rbmax"))
-                cmdstr >> beam.Rmax;
-            else if (!key.compare("Pb"))
-                cmdstr >> beam.Pb;
-            else if (!key.compare("Sb"))
-                cmdstr >> beam.Sb;
-            else if (!key.compare("Zb"))
-                cmdstr >> beam.Zb;
-            else if (!key.compare("Tb"))
-                cmdstr >> beam.Tb;
-            else if (!key.compare("Wm"))
-                cmdstr >> Wm;
-            else if (!key.compare("Wmin"))
-                cmdstr >> Wmin;
-            else if (!key.compare("maxstep"))
-                cmdstr >> maxstep;
-            else if (!key.compare("dbfile"))
-                cmdstr >> dbfile;
-            else if (!key.compare("printsteps"))
-                cmdstr >> printSteps;
-            else if (!key.compare("trackphoton"))
-                cmdstr >> trackPhoton;
-            else if (!key.compare("exportpaths"))
-                cmdstr >> storepaths;
-            else if (!key.compare("pathbasefilename"))
-                cmdstr >> RayPath::ofbasename;
-            else if (!key.compare("Zres"))
-                cmdstr >> Zres;
-            else if (!key.compare("Rres"))
-                cmdstr >> Rres;
-            else if (!key.compare("Tres"))
-                cmdstr >> Tres;
-            else if (!key.compare("THres"))
-                cmdstr >> THres;
-            else if (!key.compare("moments"))
-                cmdstr >> momentlvl;
-            else if (!key.compare("FQY"))
-                cmdstr >> medium._FQY;
-            //More complicated settings
-            else if (!key.compare("phase")) {
-                cmdstr >> tmpint;
-                medium.phase = (Medium::PhaseFunction)tmpint;
-            } else if (!key.compare("backwall")) {
-                cmdstr >> tmpbool;
-                if (tmpbool)
-                    tmpflags |= (int)SimFlags::BackWall;
-                else
-                    tmpflags &= ~((int)SimFlags::BackWall);
-                flags = (SimFlags) tmpflags;
-            } else if (!key.compare("frontwall")) {
-                cmdstr >> tmpbool;
-                if (tmpbool)
-                    tmpflags |= (int)SimFlags::FrontWall;
-                else
-                    tmpflags &= ~((int)SimFlags::FrontWall);
-                flags = (SimFlags) tmpflags;
-            } else if (!key.compare("sidewall")) {
-                cmdstr >> tmpbool;
-                if (tmpbool)
-                    tmpflags |= (int)SimFlags::RadialWall;
-                else
-                    tmpflags &= ~((int)SimFlags::RadialWall);
-                flags = (SimFlags) tmpflags;
-            } else if (!key.compare("interference")) {
-                cmdstr >> tmpbool;
-                if (tmpbool)
-                    tmpflags |= (int)SimFlags::Interference;
-                else
-                    tmpflags &= ~((int)SimFlags::Interference);
-                flags = (SimFlags) tmpflags;
-            } else if (!key.compare("saturation")) {
-                cmdstr >> tmpbool;
-                if (tmpbool)
-                    tmpflags |= (int)SimFlags::Saturation;
-                else
-                    tmpflags &= ~((int)SimFlags::Saturation);
-                flags = (SimFlags) tmpflags;
-            } else if (!key.compare("singlephoton")) {
-                cmdstr >> tmpbool;
-                if (tmpbool)
-                    tmpflags |= (int)SimFlags::SinglePhoton;
-                else
-                    tmpflags &= ~((int)SimFlags::SinglePhoton);
-                flags = (SimFlags) tmpflags;
-            } else if (!key.compare("timedependent")) {
-                cmdstr >> tmpbool;
-                if (tmpbool)
-                    tmpflags |= (int)SimFlags::TimeResolved;
-                else
-                    tmpflags &= ~((int)SimFlags::TimeResolved);
-                flags = (SimFlags) tmpflags;
-            } else if (!key.compare("fluorescence")) {
-                cmdstr >> tmpbool;
-                if (tmpbool)
-                    tmpflags |= (int)SimFlags::Fluorescence;
-                else
-                    tmpflags &= ~((int)SimFlags::Fluorescence);
-                flags = (SimFlags) tmpflags;
-            } else if (!key.compare("cartesian")) {
-                cmdstr >> tmpbool;
-                if (tmpbool)
-                    tmpflags |= (int)SimFlags::Cartesian;
-                else
-                    tmpflags &= ~((int)SimFlags::Cartesian);
-                flags = (SimFlags) tmpflags;
-            } else if (!key.compare("beamprofile")) {
-                cmdstr >> tmpint;
-                beam.beamprofile = (Beam::BeamType)tmpint;
-            } else if (!key.compare("beamspread")) {
-                cmdstr >> tmpint;
-                beam.spreadfxn = (Beam::BeamSpread)tmpint;
-            } else if (!key.compare("beamwidth")) {
-                cmdstr >> tmpint;
-                beam.beamdur = (Beam::BeamDuration)tmpint;
-            } else if (!key.compare("beamspec")) {
-                cmdstr >> tmpint;
-                beam.beamspec = (Beam::BeamSpectrum)tmpint;
-            }
+            //Skip empty strings
+            if (cmd.empty())
+                continue;
+                
+            //Check values to set
+            done = set(key, val);
+            if (done)
+                continue;
+            
             //Commands to run the program
-            else if (!key.compare("run"))
+            if (!key.compare("run"))
                 run();
             else if (!key.compare("setup"))
                 setup();
@@ -1048,10 +1035,9 @@ void Simulation::load(const string& fname, int argc, char** argv) {
                 genBeam();
             else if (!key.compare("print"))
                 print();
-            else if (!key.compare("write")) {
-                cmdstr >> tmpstring;
-                write(tmpstring);
-            } else if (!key.compare("exec")) {
+            else if (!key.compare("write"))
+                write(val);
+            else if (!key.compare("exec")) {
                 exec(argc, argv);
                 return; //Exit here
             } else
@@ -1123,7 +1109,24 @@ void Simulation::write(string s) const {
 }
 
 void Simulation::exec(int argc, char** argv) {
-    //TODO: PARSE argc, argv
+    //Loop through args and parse them
+    string cmd, val;
+    int i = 0;
+    while(i < argc) {
+        //Get command
+        cmd = argv[i];
+        i ++;
+        
+        //Get value if we didn't get the end of the string
+        if (i < argc) {
+            val = argv[i];
+            i ++;
+        } else
+            val = "";
+            
+        //Now interpret them
+        set(cmd, val);
+    }
     
     //Now generate beam, setup, etc., and run the program 
     genBeam();

@@ -23,7 +23,6 @@ struct Beam {
     enum struct BeamDuration { Uniform = 0, Gaussian = 1, Cauchy = 2 };
     enum struct BeamSpectrum { Uniform = 0, Gaussian = 1, Cauchy = 2 };
 
-
     //Data members
     double E=1e5;                   //Photons per packet
     double sin0=0.0;                //Incident sin(theta) = 0 for normal incidence (-1 to 1)
@@ -45,6 +44,8 @@ struct Beam {
     Beam();
     void print() const;
     
+    bool set(const string& key, const string& val);
+    
     void writedbheader(ofstream& OF) const;
     void writedb(ofstream& OF) const;
     
@@ -52,7 +53,7 @@ struct Beam {
 };
 
 Beam::Beam() {
-    spreadfxn = BeamSpread::Gaussian;
+    spreadfxn = BeamSpread::Collimated;
     beamprofile = BeamType::Uniform;
     beamdur = BeamDuration::Uniform;
     beamspec = BeamSpectrum::Uniform;
@@ -112,7 +113,7 @@ void Beam::print() const {
 
 vector<Photon> Beam::sampleBeam(unsigned long int N0) {
     //Initialize some values
-    vector<Photon> PHOTONS(N0, Photon(vec(),vec(sin0, 0, sqrt(1-sin0*sin0)), E));
+    vector<Photon> PHOTONS(N0, Photon(vec(0,0,CONST_EPS),vec(sin0, 0, sqrt(1-sin0*sin0)), E));
     this->N0 += N0;
     double eps, eps2;
     
@@ -131,42 +132,56 @@ vector<Photon> Beam::sampleBeam(unsigned long int N0) {
             //Rejection sampling to make sure we're less than Rmax
             r2 = 2*Rmax*Rmax;
             do {
-                //Random numbers
-                eps2 = roll();
-                eps = roll();
-            
                 //Use the randos to generate x,y values based on model
                 switch (beamprofile) {
                     case BeamType::Uniform :
+                        //Random numbers
+                        eps2 = roll();
+                        eps = roll();
+                        
+                        //Calculation
                         x = Rb * sqrt(eps) * cos(2.0 * CONST_PI * eps2);
                         y = Rb * sqrt(eps) * sin(2.0 * CONST_PI * eps2);
                         break;
                         
                     case BeamType::Gaussian :
-                        x = Rb * erfinvf((float)eps);
+                        //Random numbers
+                        eps2 = roll();
+                        
+                        //Calculation
+                        x = Rb * erfinvf(rollf());
                         y = x * sin(2.0 * CONST_PI * eps2);
                         x = x * cos(2.0 * CONST_PI * eps2);
                         break;
                         
                     case BeamType::UniformEllipse :
-                        eps2 = atan(Sb/Rb*tan(2*CONST_PI*eps2));
-                        eps = Sb*Rb/sqrt(pow(Sb*cos(eps2),2)+pow(Rb*sin(eps2),2)) * sqrt(eps);
+                        eps2 = atan(Sb/Rb*tan(2*CONST_PI*roll()));
+                        eps = Sb*Rb/hypot(Sb*cos(eps2), Rb*sin(eps2)) * sqrt(roll());
                         x = eps*cos(eps2);
                         y = eps*sin(eps2);
                         break;
                         
                     case BeamType::GaussianEllipse :
-                        x = Rb * erfinvf((float)eps);
-                        y = Sb * erfinvf((float)eps2);
+                        x = Rb * erfinvf(rollf());
+                        y = Sb * erfinvf(rollf());
                         break;
                         
                     case BeamType::UniformAnnulus :
+                        //Random numbers
+                        eps2 = roll();
+                        eps = roll();
+                        
+                        //Calculation
                         x = sqrt(Sb*Sb + (Rb*Rb-Sb*Sb)*eps) * cos(2.0 * CONST_PI * eps2);
                         y = sqrt(Sb*Sb + (Rb*Rb-Sb*Sb)*eps) * sin(2.0 * CONST_PI * eps2);
                         break;
                         
                     case BeamType::GaussianAnnulus :
-                        x = Rb + (Sb - Rb) * erfinvf((float)eps);
+                        //Random numbers
+                        eps2 = roll();
+                        
+                        //Calculation
+                        x = Rb + (Sb - Rb) * erfinvf(rollf());
                         y = x * sin(2.0 * CONST_PI * eps2);
                         x = x * cos(2.0 * CONST_PI * eps2);
                         break;
@@ -190,16 +205,15 @@ vector<Photon> Beam::sampleBeam(unsigned long int N0) {
         ///
         PHOTONS.at(i).v = wb;
         if (dwb > 0) {
-            eps = roll();
             switch (beamspec) {
                 case BeamSpectrum::Uniform :
-                    PHOTONS.at(i).v += dwb * (eps-0.5);
+                    PHOTONS.at(i).v += dwb * (roll()-0.5);
                     break;
                 case BeamSpectrum::Gaussian :
-                    PHOTONS.at(i).v += dwb * erfinvf((float)eps);
+                    PHOTONS.at(i).v += dwb * erfinvf(rollf());
                     break;
                 case BeamSpectrum::Cauchy :
-                    PHOTONS.at(i).v += - dwb / tan(CONST_PI * eps);
+                    PHOTONS.at(i).v += - dwb / tan(CONST_PI * roll());
                     break;
             }
         }
@@ -208,17 +222,16 @@ vector<Photon> Beam::sampleBeam(unsigned long int N0) {
         //  Calculate photon packet time
         ///
         if (Tb > 0) {
-            eps = roll();
             switch (beamdur) {
                 case BeamDuration::Uniform :
-                    PHOTONS.at(i).t = eps * Tb;
+                    PHOTONS.at(i).t = roll() * Tb;
                     break;
                 case BeamDuration::Gaussian :
-                    PHOTONS.at(i).t = Tb * erfinvf((float)eps);
+                    PHOTONS.at(i).t = Tb * erfinvf(rollf());
                     break;
                     
                 case BeamDuration::Cauchy :
-                    PHOTONS.at(i).t = -Tb / tan(CONST_PI * eps);
+                    PHOTONS.at(i).t = -Tb / tan(CONST_PI * roll());
                     break;
             }
         }
@@ -241,10 +254,6 @@ vector<Photon> Beam::sampleBeam(unsigned long int N0) {
         if (spreadfxn == BeamSpread::Collimated)
             continue;
             
-        //Roll new random numbers
-        eps2 = roll()*2*CONST_PI; //Azimuthal angle
-        eps = roll();
-        
         //Sample distributions for dispersion on top of focus
         x = 1;
         switch (spreadfxn) {
@@ -252,22 +261,22 @@ vector<Photon> Beam::sampleBeam(unsigned long int N0) {
                 x = 1.0;
                 break;
             case BeamSpread::Gaussian :
-                x = 1.0 - Sp * erfinvf((float)eps);
+                x = 1.0 - Sp * erfinvf(rollf());
                 break;
             case BeamSpread::Lambertian :
                 if (Pb > 0)
-                    x = sqrt(1.0 - pow(eps*Sp,2));
+                    x = sqrt(1.0 - pow(roll()*Sp,2));
                 else
-                    x = sqrt(1.0 - pow(eps,2));
+                    x = sqrt(1.0 - pow(roll(),2));
                 break;
             case BeamSpread::Isotropic :
                 if (Pb > 0)
-                    x = 1.0 - eps*Sp;
+                    x = 1.0 - roll()*Sp;
                 else
-                    x = 1.0 - eps;
+                    x = 1.0 - roll();
                 break;
         }
-        PHOTONS.at(i).mu = PHOTONS.at(i).mu * x + PHOTONS.at(i).mu.perp(eps2) * sqrt(1.0-x*x);
+        PHOTONS.at(i).mu = PHOTONS.at(i).mu * x + PHOTONS.at(i).mu.perp(roll()*2*CONST_PI) * sqrt(1.0-x*x);
     }
     return PHOTONS;
 }
@@ -278,6 +287,36 @@ void Beam::writedbheader(ofstream& OF) const {
 
 void Beam::writedb(ofstream& OF) const {
     OF << scientific << setprecision(8) << E;
+}
+
+bool Beam::set(const string& key, const string& val) {
+    if (!key.compare("E"))
+        E = stod(val);
+    else if (!key.compare("sin0"))
+        sin0 = stod(val);
+    else if (!key.compare("Rb"))
+        Rb = stod(val);
+    else if (!key.compare("Rbmax"))
+        Rmax = stod(val);
+    else if (!key.compare("Pb"))
+        Pb = stod(val);
+    else if (!key.compare("Sb"))
+        Sb = stod(val);
+    else if (!key.compare("Zb"))
+        Zb = stod(val);
+    else if (!key.compare("Tb"))
+        Tb = stod(val);
+    else if (!key.compare("beamprofile"))
+        beamprofile = (Beam::BeamType)stoul(val);
+    else if (!key.compare("beamspread"))
+        spreadfxn = (Beam::BeamSpread)stoul(val);
+    else if (!key.compare("beamwidth"))
+        beamdur = (Beam::BeamDuration)stoul(val);
+    else if (!key.compare("beamspec"))
+        beamspec = (Beam::BeamSpectrum)stoul(val);
+    else
+        return false;
+    return true;
 }
 
 #endif
