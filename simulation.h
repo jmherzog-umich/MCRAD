@@ -64,6 +64,8 @@ class Simulation {
             Fluorescence  = 0b000001000000,     //Whether to generate fluorescence photons during the run
             Cartesian     = 0b000010000000,     //Whether the radial wall is square or not
             TimeResolved  = 0b000100000000,     //Whether the radial wall is square or not
+            PeriodicXY    = 0b001000000000,     //Whether the radial boundary condition is periodic
+            PeriodicZ     = 0b010000000000,     //Whether the Z-axis boundaries enforce periodic behavior
         };
     
     private:
@@ -291,6 +293,10 @@ void Simulation::printsettings() const {
     cout << "Single-photon mode: " << (((int)flags & (int)SimFlags::SinglePhoton) ? "True" : "False" ) << endl;
     cout << "Fluorescence generation: " << (((int)flags & (int)SimFlags::Fluorescence) ? "True" : "False" ) << endl;
     cout << "Side wall geometry: " << (((int)flags & (int)SimFlags::Cartesian) ? "Cartesian" : "Cylindrical" ) << endl;
+    cout << "Periodic XY: " << (((int)flags & (int)SimFlags::PeriodicXY) ? "True" : "False" ) << endl;
+    if (((int)flags & (int)SimFlags::PeriodicXY) && !((int)flags & (int)SimFlags::Cartesian))
+        cout << "   WARNING: PERIODIC RADIAL BC WITH CYLINDRICAL COORDINATES. TAKE CARE INTERPRETING RESULTS." << endl;
+    cout << "Periodic Z: " << (((int)flags & (int)SimFlags::PeriodicZ) ? "True" : "False" ) << endl;
     cout << "Photon packets: " << N0 << endl;
     cout << "Total photons: " << stats.PHI << endl;
     cout << "Simulation time-step: " << dT << " ps" << endl;
@@ -588,36 +594,43 @@ void Simulation::run() {
                         ds = ds2;
                 }
                 
-                //-Calculate distance to back wall
-                if ( ((int)flags & (int)SimFlags::BackWall) and (PHOTONS.at(i).mu.Z > 0)) {
-                    //If the back wall is closer than the current ds value
-                    ds2 = (L - PHOTONS.at(i).x.Z)/PHOTONS.at(i).mu.Z * k;
-                    if (ds2 <= ds and ds2 >= 0) {
-                        ds = ds2;
-                        reflect = 1;
+                //-If we have periodic Z axis, then ignore the walls, otherwise check for collisions
+                if (!((int)flags & (int)SimFlags::PeriodicZ)) {
+                
+                    //--Calculate distance to back wall
+                    if ( ((int)flags & (int)SimFlags::BackWall) and (PHOTONS.at(i).mu.Z > 0)) {
+                        //If the back wall is closer than the current ds value
+                        ds2 = (L - PHOTONS.at(i).x.Z)/PHOTONS.at(i).mu.Z * k;
+                        if (ds2 <= ds and ds2 >= 0) {
+                            ds = ds2;
+                            reflect = 1;
+                        }
+                    }
+                    
+                    //-Calculate distance to front wall
+                    if ( ((int)flags & (int)SimFlags::FrontWall) and (PHOTONS.at(i).mu.Z < 0)) {
+                        //If the front wall is closer than the current ds value
+                        ds2 = -PHOTONS.at(i).x.Z/PHOTONS.at(i).mu.Z * k;
+                        if (ds2 <= ds and ds2 >= 0) {
+                            ds = ds2;
+                            reflect = 2;
+                        }
                     }
                 }
                 
-                //-Calculate distance to front wall
-                if ( ((int)flags & (int)SimFlags::FrontWall) and (PHOTONS.at(i).mu.Z < 0)) {
-                    //If the front wall is closer than the current ds value
-                    ds2 = -PHOTONS.at(i).x.Z/PHOTONS.at(i).mu.Z * k;
-                    if (ds2 <= ds and ds2 >= 0) {
-                        ds = ds2;
-                        reflect = 2;
-                    }
-                }
-                
-                //-Calculate distance to radial wall
-                if ((int)flags & (int)SimFlags::RadialWall) {
-                    //Check cylindrical geometry
-                    if ((int)flags & (int)SimFlags::Cartesian)
-                        ds2 = PHOTONS.at(i).intersectXY(R,xy) * k;
-                    else
-                        ds2 = PHOTONS.at(i).intersectR(R) * k;
-                    if (ds2 < ds and ds2 >= 0) {
-                        ds = ds2;
-                        reflect = 3;
+                //-If we have periodic X-Y axis, then ignore the walls, otherwise check for collisions
+                if (!((int)flags & (int)SimFlags::PeriodicXY)) {
+                    //-Calculate distance to radial wall
+                    if ((int)flags & (int)SimFlags::RadialWall) {
+                        //Check cylindrical geometry
+                        if ((int)flags & (int)SimFlags::Cartesian)
+                            ds2 = PHOTONS.at(i).intersectXY(R,xy) * k;
+                        else
+                            ds2 = PHOTONS.at(i).intersectR(R) * k;
+                        if (ds2 < ds and ds2 >= 0) {
+                            ds = ds2;
+                            reflect = 3;
+                        }
                     }
                 }
                 
@@ -634,6 +647,30 @@ void Simulation::run() {
                 PHOTONS.at(i).S -= ds;
                 PHOTONS.at(i).x += PHOTONS.at(i).mu * ds / k;
                 PHOTONS.at(i).t += ds / k / CONST_C * n;
+                
+                //Enforce periodic boundaries if we have them
+                if ((int)flags & (int)SimFlags::PeriodicXY) {
+                    if ((int)flags & (int)SimFlags::Cartesian) {
+                        while ( abs(PHOTONS.at(i).x.X) > R )
+                            PHOTONS.at(i).x.X -= copysign(2*R, PHOTONS.at(i).x.X);
+                        while ( abs(PHOTONS.at(i).x.Y) > R )
+                            PHOTONS.at(i).x.Y -= copysign(2*R, PHOTONS.at(i).x.Y);
+                    } else {
+                        if ( PHOTONS.at(i).x.r2() > R*R ) {
+                            u = vec(PHOTONS.at(i).x.X, PHOTONS.at(i).x.Y, 0);
+                            u = u / u.norm();
+                            while ( PHOTONS.at(i).x.r2() > R*R ) {
+                                PHOTONS.at(i).x = PHOTONS.at(i).x - u * 2 * R;
+                            }
+                        }
+                    }
+                }
+                if ((int)flags & (int)SimFlags::PeriodicZ) {
+                    while ( PHOTONS.at(i).x.Z > L )
+                        PHOTONS.at(i).x.Z -= L;
+                    while ( PHOTONS.at(i).x.Z < 0 )
+                        PHOTONS.at(i).x.Z += L;
+                }
                 
                 //Look for transmission events (hitting back surface) from the current cell
                 if ( reflect == 1 ) {
@@ -996,6 +1033,20 @@ bool Simulation::set(const string &key, const string& val) {
             tmpflags |= (int)SimFlags::Cartesian;
         else
             tmpflags &= ~((int)SimFlags::Cartesian);
+        flags = (SimFlags) tmpflags;
+    } else if (!key.compare("periodicxy")) {
+        tmpbool = stoi(val);
+        if (tmpbool)
+            tmpflags |= (int)SimFlags::PeriodicXY;
+        else
+            tmpflags &= ~((int)SimFlags::PeriodicXY);
+        flags = (SimFlags) tmpflags;
+    } else if (!key.compare("periodicz")) {
+        tmpbool = stoi(val);
+        if (tmpbool)
+            tmpflags |= (int)SimFlags::PeriodicZ;
+        else
+            tmpflags &= ~((int)SimFlags::PeriodicZ);
         flags = (SimFlags) tmpflags;
     } else
         return false;

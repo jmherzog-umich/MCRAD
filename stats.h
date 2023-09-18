@@ -26,6 +26,7 @@ struct Stats {
     
     //Initialize moments and other outputs
     vector<double> MOMENTS, SMOMENTS, THMOMENT, TMOMENT, STMOMENT;
+    double RAD2, RAD2F, WRAD, WRADF;
     
     //Time-dependence
     vector<double> Tt, Rt, Lt, At;
@@ -478,6 +479,15 @@ void Stats::reflect(const Photon& p, int surf, double R, double sint) {
         if (binT >= 0)
             Lt.at(binT) += (1-R) * W;
     }
+    
+    //Increment beam radii
+    if (surf == 1) {
+        WRAD += W;
+        RAD2 += W * p.x.r2();
+    } else if (surf == 2) {
+        WRAD += W;
+        RAD2 += W * p.x.r2();
+    }
 }
 
 double Stats::initialize(const Photon& p, double m) {
@@ -843,7 +853,7 @@ void Stats::print() const {
 }
 
 void Stats::writedbheader(ofstream& OF) const {
-    OF << "Trans,Ref0,RefD,TransS,TransB,Abs,FGen,FAbs,Ff,Fb,Fs,Ffb,Fbb,Fsb,Pen,Rad"<<endl;
+    OF << "Trans,Ref0,RefD,TransS,TransB,Abs,FGen,FAbs,Ff,Fb,Fs,Ffb,Fbb,Fsb,Pen,RadL,Rad0";
 }
 
 void Stats::writedb(ofstream& OF) const {
@@ -862,7 +872,8 @@ void Stats::writedb(ofstream& OF) const {
     OF << scientific << setprecision(8) << Fbballistic/PHI << ",";
     OF << scientific << setprecision(8) << Flballistic/PHI << ",";
     OF << scientific << setprecision(8) << SMOMENTS[0]/ASCAT << ",";
-    OF << scientific << setprecision(8) << sqrt(SMOMENTS[4]/ASCAT - pow(SMOMENTS[1]/ASCAT,2));
+    OF << scientific << setprecision(8) << sqrt(RAD2/WRAD) << ",";
+    OF << scientific << setprecision(8) << sqrt(RAD2F/WRADF);
 }
 
 #endif
