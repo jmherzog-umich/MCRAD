@@ -3,6 +3,9 @@
 #include <ctime>
 #include <string>
 #include <cstdint>
+#include <algorithm>
+#include <cctype>
+#include <iostream>
 
 #define FP_FAST_FMA
 #define CONST_EPS 1e-10
@@ -11,6 +14,29 @@
 #define _UTILITY_H_
 
 using namespace std;
+
+//Helper functions
+bool isvec(const string& s) {
+    for (char x : s)
+        if (x == ',' or x == ';')
+            return true;
+    return false;
+}
+
+vector<string> splitcomma(const string& s) {
+    vector<string> out;
+    string tmp = "";
+    for (char x : s+',') {
+        if (x == ',' or x == ';') {
+            if (tmp.length() > 0) {
+                out.push_back(tmp);
+                tmp = "";
+            }
+        } else
+            tmp.push_back(x);
+    }
+    return out;
+}
 
 //Random values
 namespace {

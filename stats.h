@@ -124,6 +124,20 @@ Stats::Stats(int nT, int nTH, double dT, double dTf, int LVL) {
     //Grid resolution
     T = dT * Tres;
     dTHETA = CONST_PI/THETAres/2;
+    
+    //Initialize moments and other outputs
+    MOMENTS = vector<double>(14, 0.0);
+    THMOMENT = vector<double>(8, 0.0);
+    TMOMENT = vector<double>(4, 0.0);
+    SMOMENTS = vector<double>(14, 0.0);
+    STMOMENT = vector<double>(4, 0.0);
+    
+    //Fluorescence moments
+    FMOMENTS = vector<double>(14, 0.0);
+    FTHMOMENT = vector<double>(8, 0.0);
+    FTMOMENT = vector<double>(4, 0.0);
+    FSMOMENTS = vector<double>(14, 0.0);
+    FSTMOMENT = vector<double>(4, 0.0);
 }
 
 void Stats::setup() {

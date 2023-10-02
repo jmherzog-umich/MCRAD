@@ -35,13 +35,13 @@ using namespace std;
 class Simulation {
     public:
         Simulation();
-        void load(const string& fname, int argc, char** argv);
+        void load(const string& fname, const vector<string>& args);
         void setup();
         void run();
         void genBeam();
         void genFluor();
-        void exec(int argc, char** argv);
-        bool set(const string &key, const string& val);
+        void exec(const vector<string>& args);
+        bool set(const string &key, const vector<string>& val);
         
         void emitPhoton(const vec& x, double W, double t0);
         
@@ -133,8 +133,6 @@ Simulation::Simulation() {
     Wmin = 1e-10; Wm = 0.1;
     Zres = 20; Rres = 20; Tres = 20; THres = 10; momentlvl = 4;
     flags = (Simulation::SimFlags)135;
-    beam = Beam();
-    medium = Medium();
     imgIC = Image(5,5,2*beam.Rb/5, false);
     imgR = Image(10,10,2*beam.Rb/5, ((int)flags & (int)SimFlags::Interference));
     imgT = Image(10,10,2*beam.Rb/5, ((int)flags & (int)SimFlags::Interference));
@@ -310,13 +308,17 @@ void Simulation::printsettings() const {
         if ((int)flags & (int)SimFlags::Fluorescence)
             cout << "Storing " << storepaths << " fluorescence ray paths to file: " << RayPath::ofbasename << ".xyz" << endl;
     }
-    cout << "Theoretical max (static) step count for absorption: " << ceil(log(Wmin)/log(medium.albedo()) + 1.0/Wm) << endl;
+    cout << "Theoretical max (static) step count for absorption: " << ceil(log(Wmin)/log(medium.albedo(beam.wb)) + 1.0/Wm) << endl;
     if ((int)flags & (int)SimFlags::TimeResolved)
         cout << "Theoretical max (dynamic) step count for absorption: " << ceil((ceil(log(Wmin)/log(medium.albedo())) + 1.0/Wm) / medium.we() / stats.dT) << endl;
     cout << endl;
     
     //Print medium settings
     medium.print();
+    cout << "Peak incident wavelength: " << beam.wb << " THz" << endl;
+    medium.print_at_f(beam.wb);
+    cout << "Peak fluorescence wavelength: " << medium.peak_v() << " THz" << endl;
+    medium.print_at_f(medium.peak_v());
     
     //Print beam info
     beam.print();
@@ -464,12 +466,6 @@ void Simulation::run() {
     int reflect;
     vec norm, u;
     Photon pt;
-    
-    //Scattering/absorption coefficients
-    ks = medium.ks();
-    ka0 = medium.ka();
-    ka = ka0;
-    k = ka + ks;
     ii = jj = kk = 0;
     
     //Some default values just in case
@@ -508,6 +504,12 @@ void Simulation::run() {
             }
             if (done)
                 break;                           // and stop simulation
+            
+            //Get scattering/abs coeffs for this photon
+            ks = medium.ks(PHOTONS.at(i).v);
+            ka0 = medium.ka(PHOTONS.at(i).v);
+            ka = ka0;
+            k = ka + ks;
             
             //Check for boundary collision and cell collisions
             while (true) {
@@ -645,7 +647,7 @@ void Simulation::run() {
                 
                 //Move photon as necessary and update the incremental shift
                 PHOTONS.at(i).S -= ds;
-                PHOTONS.at(i).x += PHOTONS.at(i).mu * ds / k;
+                PHOTONS.at(i).x += PHOTONS.at(i).mu * ds / medium.ke(PHOTONS.at(i).v);
                 PHOTONS.at(i).t += ds / k / CONST_C * n;
                 
                 //Enforce periodic boundaries if we have them
@@ -913,7 +915,7 @@ void Simulation::run() {
     cout<<"Calculation complete in "<<STEP-1<<" steps ("<<maxstep<<" allowed)"<<endl<<endl;
 }
 
-bool Simulation::set(const string &key, const string& val) {
+bool Simulation::set(const string &key, const vector<string>& val) {
     //Temporary variables
     bool tmpbool = false;
     unsigned long int tmpflags = (unsigned long int)flags;
@@ -932,117 +934,117 @@ bool Simulation::set(const string &key, const string& val) {
     
     //If we're here, the key either belongs to Simulation or doesn't exist
     if (!key.compare("n0"))
-        n0 = stod(val);
+        n0 = stod(val.at(0));
     else if (!key.compare("nx"))
-        nx = stod(val);
+        nx = stod(val.at(0));
     else if (!key.compare("nr"))
-        nr = stod(val);
+        nr = stod(val.at(0));
     else if (!key.compare("N0"))
-        N0 = stoul(val);
+        N0 = stoul(val.at(0));
     else if (!key.compare("L"))
-        L = stod(val);
+        L = stod(val.at(0));
     else if (!key.compare("R"))
-        R = stod(val);
+        R = stod(val.at(0));
     else if (!key.compare("dT"))
-        dT = stod(val);
+        dT = stod(val.at(0));
     else if (!key.compare("Wm"))
-        Wm = stod(val);
+        Wm = stod(val.at(0));
     else if (!key.compare("Wmin"))
-        Wmin = stod(val);
+        Wmin = stod(val.at(0));
     else if (!key.compare("maxstep"))
-        maxstep = stoul(val);
+        maxstep = stoul(val.at(0));
     else if (!key.compare("dbfile"))
-        dbfile = val;
+        dbfile = val.at(0);
     else if (!key.compare("printsteps"))
-        printSteps = stoul(val);
+        printSteps = stoul(val.at(0));
     else if (!key.compare("trackphoton"))
-        trackPhoton = stoul(val);
+        trackPhoton = stoul(val.at(0));
     else if (!key.compare("exportpaths"))
-        storepaths = stoul(val);
+        storepaths = stoul(val.at(0));
     else if (!key.compare("pathbasefilename"))
-        RayPath::ofbasename = val;
+        RayPath::ofbasename = val.at(0);
     else if (!key.compare("Zres"))
-        Zres = stoul(val);
+        Zres = stoul(val.at(0));
     else if (!key.compare("Rres"))
-        Rres = stoul(val);
+        Rres = stoul(val.at(0));
     else if (!key.compare("Tres"))
-        Tres = stoul(val);
+        Tres = stoul(val.at(0));
     else if (!key.compare("THres"))
-        THres = stoul(val);
+        THres = stoul(val.at(0));
     else if (!key.compare("moments"))
-        momentlvl = stoul(val);
+        momentlvl = stoul(val.at(0));
     else if (!key.compare("backwall")) {
-        tmpbool = stoi(val);
+        tmpbool = stoi(val.at(0));
         if (tmpbool)
             tmpflags |= (int)SimFlags::BackWall;
         else
             tmpflags &= ~((int)SimFlags::BackWall);
         flags = (SimFlags) tmpflags;
     } else if (!key.compare("frontwall")) {
-        tmpbool = stoi(val);
+        tmpbool = stoi(val.at(0));
         if (tmpbool)
             tmpflags |= (int)SimFlags::FrontWall;
         else
             tmpflags &= ~((int)SimFlags::FrontWall);
         flags = (SimFlags) tmpflags;
     } else if (!key.compare("sidewall")) {
-        tmpbool = stoi(val);
+        tmpbool = stoi(val.at(0));
         if (tmpbool)
             tmpflags |= (int)SimFlags::RadialWall;
         else
             tmpflags &= ~((int)SimFlags::RadialWall);
         flags = (SimFlags) tmpflags;
     } else if (!key.compare("interference")) {
-        tmpbool = stoi(val);
+        tmpbool = stoi(val.at(0));
         if (tmpbool)
             tmpflags |= (int)SimFlags::Interference;
         else
             tmpflags &= ~((int)SimFlags::Interference);
         flags = (SimFlags) tmpflags;
     } else if (!key.compare("saturation")) {
-        tmpbool = stoi(val);
+        tmpbool = stoi(val.at(0));
         if (tmpbool)
             tmpflags |= (int)SimFlags::Saturation;
         else
             tmpflags &= ~((int)SimFlags::Saturation);
         flags = (SimFlags) tmpflags;
     } else if (!key.compare("singlephoton")) {
-        tmpbool = stoi(val);
+        tmpbool = stoi(val.at(0));
         if (tmpbool)
             tmpflags |= (int)SimFlags::SinglePhoton;
         else
             tmpflags &= ~((int)SimFlags::SinglePhoton);
         flags = (SimFlags) tmpflags;
     } else if (!key.compare("timedependent")) {
-        tmpbool = stoi(val);
+        tmpbool = stoi(val.at(0));
         if (tmpbool)
             tmpflags |= (int)SimFlags::TimeResolved;
         else
             tmpflags &= ~((int)SimFlags::TimeResolved);
         flags = (SimFlags) tmpflags;
     } else if (!key.compare("fluorescence")) {
-        tmpbool = stoi(val);
+        tmpbool = stoi(val.at(0));
         if (tmpbool)
             tmpflags |= (int)SimFlags::Fluorescence;
         else
             tmpflags &= ~((int)SimFlags::Fluorescence);
         flags = (SimFlags) tmpflags;
     } else if (!key.compare("cartesian")) {
-        tmpbool = stoi(val);
+        tmpbool = stoi(val.at(0));
         if (tmpbool)
             tmpflags |= (int)SimFlags::Cartesian;
         else
             tmpflags &= ~((int)SimFlags::Cartesian);
         flags = (SimFlags) tmpflags;
     } else if (!key.compare("periodicxy")) {
-        tmpbool = stoi(val);
+        tmpbool = stoi(val.at(0));
         if (tmpbool)
             tmpflags |= (int)SimFlags::PeriodicXY;
         else
             tmpflags &= ~((int)SimFlags::PeriodicXY);
         flags = (SimFlags) tmpflags;
     } else if (!key.compare("periodicz")) {
-        tmpbool = stoi(val);
+        tmpbool = stoi(val.at(0));
         if (tmpbool)
             tmpflags |= (int)SimFlags::PeriodicZ;
         else
@@ -1053,9 +1055,10 @@ bool Simulation::set(const string &key, const string& val) {
     return true;
 }
 
-void Simulation::load(const string& fname, int argc, char** argv) {
+void Simulation::load(const string& fname, const vector<string>& args) {
         //Allocate some memory and open the file
-        string cmd, key, val;
+        string cmd, key, tmp;
+        vector<string> vals;
         stringstream cmdstr;
         ifstream ifile(fname);
         bool done;
@@ -1064,39 +1067,43 @@ void Simulation::load(const string& fname, int argc, char** argv) {
         while (!ifile.eof()) {
             //Get the command
             getline(ifile, cmd);
-            cmdstr.str(cmd);
-            cmdstr >> key;
-            cmdstr >> val;
             
             //Skip empty strings
             if (cmd.empty())
                 continue;
                 
+            //Make into a stringstream and split into key/value pairs
+            cmdstr.str(cmd);
+            cmdstr >> key;
+            while (cmdstr >> tmp)
+                vals.push_back(tmp);
+                
             //Check values to set
-            done = set(key, val);
-            if (done)
-                continue;
+            done = set(key, vals);
             
             //Commands to run the program
-            if (!key.compare("run"))
-                run();
-            else if (!key.compare("setup"))
-                setup();
-            else if (!key.compare("genBeam"))
-                genBeam();
-            else if (!key.compare("print"))
-                print();
-            else if (!key.compare("write"))
-                write(val);
-            else if (!key.compare("exec")) {
-                exec(argc, argv);
-                return; //Exit here
-            } else
-                cerr << "Unknown input option: " << cmd << endl;
+            if (!done) {
+                if (!key.compare("run"))
+                    run();
+                else if (!key.compare("setup"))
+                    setup();
+                else if (!key.compare("genBeam"))
+                    genBeam();
+                else if (!key.compare("print"))
+                    print();
+                else if (!key.compare("write"))
+                    write(vals.at(0));
+                else if (!key.compare("exec")) {
+                    exec(args);
+                    return; //Exit here
+                } else
+                    cerr << "Unknown input option: " << cmd << endl;
+            }
                 
             //Clear values
             key.clear();
             cmd.clear();
+            vals.clear();
             cmdstr.clear();
         }
         
@@ -1159,24 +1166,25 @@ void Simulation::write(string s) const {
     OF.close();
 }
 
-void Simulation::exec(int argc, char** argv) {
+void Simulation::exec(const vector<string>& args) {
     //Loop through args and parse them
-    string cmd, val;
-    int i = 0;
-    while(i < argc) {
+    string cmd;
+    vector<string> arg;
+    unsigned long int i = 0;
+    while(i < args.size()) {
         //Get command
-        cmd = argv[i];
+        cmd = args.at(i);
         i ++;
         
         //Get value if we didn't get the end of the string
-        if (i < argc) {
-            val = argv[i];
+        if (i < args.size()) {
+            arg = splitcomma(args.at(i));
             i ++;
         } else
-            val = "";
+            arg = {""};
             
         //Now interpret them
-        set(cmd, val);
+        set(cmd, arg);
     }
     
     //Now generate beam, setup, etc., and run the program 

@@ -31,7 +31,7 @@ struct Beam {
     double Sb=2.5e2;                //Beam profile parameter: linewidth (UniformEllipse, Guass1D), Inner radius (UniformAnnulus, GaussianAnnulus)
     double Zb = 0;                  //Focus location of beam (0 for infinity/unfocused)
     double Tb = 0;                  //Laser pulse duration
-    double wb=5.5e2;                //Angular frequency in THz (5.5e5 ~ 545 nm light)
+    double wb=800;                  //Angular frequency in THz (5.5e5 ~ 545 nm light)
     double dwb=0;                   //Angular frequency spread parameter (THz);
     double N0 = 0;
     double Rmax = 0;                //Maximum allowed radius 
@@ -44,7 +44,7 @@ struct Beam {
     Beam();
     void print() const;
     
-    bool set(const string& key, const string& val);
+    bool set(const string& key, const vector<string>& val);
     
     void writedbheader(ofstream& OF) const;
     void writedb(ofstream& OF) const;
@@ -57,7 +57,7 @@ Beam::Beam() {
     beamprofile = BeamType::Uniform;
     beamdur = BeamDuration::Uniform;
     beamspec = BeamSpectrum::Uniform;
-    sin0=0.0; Rb=5e2; wb=5.5e2; dwb=0;
+    sin0=0.0; Rb=5e2; wb=800; dwb=0;
     Zb = 0; Tb = 0; Pb = 0; N0 = 0; E = 1e5;
 }
 
@@ -289,31 +289,31 @@ void Beam::writedb(ofstream& OF) const {
     OF << scientific << setprecision(8) << E;
 }
 
-bool Beam::set(const string& key, const string& val) {
+bool Beam::set(const string& key, const vector<string>& val) {
     if (!key.compare("E"))
-        E = stod(val);
+        E = stod(val.at(0));
     else if (!key.compare("sin0"))
-        sin0 = stod(val);
+        sin0 = stod(val.at(0));
     else if (!key.compare("Rb"))
-        Rb = stod(val);
+        Rb = stod(val.at(0));
     else if (!key.compare("Rbmax"))
-        Rmax = stod(val);
+        Rmax = stod(val.at(0));
     else if (!key.compare("Pb"))
-        Pb = stod(val);
+        Pb = stod(val.at(0));
     else if (!key.compare("Sb"))
-        Sb = stod(val);
+        Sb = stod(val.at(0));
     else if (!key.compare("Zb"))
-        Zb = stod(val);
+        Zb = stod(val.at(0));
     else if (!key.compare("Tb"))
-        Tb = stod(val);
+        Tb = stod(val.at(0));
     else if (!key.compare("beamprofile"))
-        beamprofile = (Beam::BeamType)stoul(val);
+        beamprofile = (Beam::BeamType)stoul(val.at(0));
     else if (!key.compare("beamspread"))
-        spreadfxn = (Beam::BeamSpread)stoul(val);
+        spreadfxn = (Beam::BeamSpread)stoul(val.at(0));
     else if (!key.compare("beamwidth"))
-        beamdur = (Beam::BeamDuration)stoul(val);
+        beamdur = (Beam::BeamDuration)stoul(val.at(0));
     else if (!key.compare("beamspec"))
-        beamspec = (Beam::BeamSpectrum)stoul(val);
+        beamspec = (Beam::BeamSpectrum)stoul(val.at(0));
     else
         return false;
     return true;

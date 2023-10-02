@@ -41,9 +41,12 @@ int main(int argc, char** argv) {
     //Check if we have an  input file
     if (argc > 1) {
         //Read file
-        I.load(argv[1], argc-2, argv+2*sizeof(char));
+        vector<string> args;
+        for (int i = 2; i < argc; i ++)
+            args.push_back(argv[i]);
+        I.load(argv[1], args);
     } else {
         //Run simulation
-        I.exec(0, nullptr);
+        I.exec(vector<string>());
     }
 };

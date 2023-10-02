@@ -1,5 +1,5 @@
-Ss 1
-Sa 0
+Ss 0.5
+Sa 0.1 700 0.5
 N0 5000000
 n0 1
 nx 1
@@ -27,5 +27,6 @@ singlephoton 1
 beamprofile 0
 beamspread 1
 dbfile test.csv
+exportpaths 0
 pathbasefilename test
 exec
