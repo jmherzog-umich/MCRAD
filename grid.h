@@ -9,6 +9,8 @@
 #include "vec.h"
 #include "utility.h"
 
+#define CONST_EPS 1e-10
+
 #ifndef __GRID_H
 #define __GRID_H
 
@@ -553,7 +555,7 @@ void Grid::printOutside(int id) const {
                 }
                 ss << endl;
             }
-            cout << "    [X, Y; Z < -Lz/2]: " << tmp << endl;
+            cout << "    [X, Y; Z <  0]: " << tmp << endl;
             if (tmp > CONST_EPS)
                 cout << ss.str() << endl;
             
@@ -566,7 +568,7 @@ void Grid::printOutside(int id) const {
                 }
                 ss << endl;
             }
-            cout << "    [X, Y; Z > +Lz/2]: " << tmp << endl;
+            cout << "    [X, Y; Z > Lz]: " << tmp << endl;
             if (tmp > CONST_EPS)
                 cout << ss.str() << endl;
             

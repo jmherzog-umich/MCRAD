@@ -295,7 +295,7 @@ bool Beam::set(const string& key, const vector<string>& val) {
     else if (!key.compare("sin0"))
         sin0 = stod(val.at(0));
     else if (!key.compare("Rb"))
-        Rb = stod(val.at(0));
+        Rb = max(1.0, stod(val.at(0)));
     else if (!key.compare("Rbmax"))
         Rmax = stod(val.at(0));
     else if (!key.compare("Pb"))

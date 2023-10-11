@@ -139,11 +139,11 @@ void Medium::print() const {
 }
 
 Medium::Medium() {
-    _g = {0.98, 1}; _FQY = 0.5;
+    _g = {0.98, 1}; _FQY = 1;
     phase = PhaseFunction::HenyeyGreenstein;
     xcs = CrossSectionModel::Constant;
-    xca = CrossSectionModel::Binary;
-    _f = 550; _Ss = {0.5}; _Sa = {0.1, 700, 0.5};
+    xca = CrossSectionModel::Constant;
+    _f = 550; _Ss = {0.5}; _Sa = {0.1};
     _dens = 1e-4; _n = 1.33;
     _tau = 1000;
 }
@@ -228,7 +228,7 @@ double Medium::ka(double w) const {
     return Sa(w)*_dens;
 }
 double Medium::ke(double w) const {
-    return Se()*_dens;
+    return Se(w)*_dens;
 }
 double Medium::ls(double w) const {
     return 1/ks(w);

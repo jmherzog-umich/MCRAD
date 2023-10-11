@@ -369,7 +369,8 @@ void Stats::diffusion(const vec& x, double w, double t) {
     ND += w;
 }
 
-double Stats::getR(const vec& mu, const vec& n, double m, double& sint) const {
+double Stats::getR(const vec& mu, const vec& n, double m, double& sint) const {    
+    //Otherwise perform calculation
     double R, cost;
     cost = -n.dot(mu);
     if (1-cost < CONST_EPS) {

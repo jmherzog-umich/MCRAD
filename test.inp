@@ -1,5 +1,7 @@
-Ss 0.5
-Sa 0.1 700 0.5
+Ss 0.00001
+Sa 0 700 1
+xca 12
+xcs 0
 N0 5000000
 n0 1
 nx 1
@@ -10,10 +12,10 @@ Zres 20
 THres 20
 Tres 200
 dens 0.0005
-R 1
-L 100
+R 10000
+L 10000
 dT 0.01
-Rb 0
+Rb 1
 Rbmax 1
 phase 0
 backwall 1
@@ -23,7 +25,7 @@ cartesian 1
 periodicxy 0
 fluorescence 1
 timedependent 0
-singlephoton 1
+singlephoton 0
 beamprofile 0
 beamspread 1
 dbfile test.csv

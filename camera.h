@@ -46,8 +46,8 @@ struct Camera {
         Camera();
         Camera(int n, double Lpx, bool interference = false);
         Camera(int n, double Lpx, const vec& pos, const vec& u, bool interference = false);
-        Camera(int n, double Lpx, double So, double fn, double fl, bool interference = false);
-        Camera(int n, double Lpx, double So, double fn, double fl, const vec& pos, const vec& mu, bool interference = false);
+        Camera(int n, double Lpx, double M, double fn, double fl, bool interference = false);
+        Camera(int n, double Lpx, double M, double fn, double fl, const vec& pos, const vec& mu, bool interference = false);
         
         void print() const;
         void printGrid() const;
@@ -69,6 +69,9 @@ struct Camera {
         double _Si;
         double _D;
         double _t;
+        
+        vec right;
+        vec up;
 };
 
 void Camera::image(Photon& p, double n) {
@@ -81,11 +84,12 @@ void Camera::image(Photon& p, double n) {
     //Figure out how far it is to the object and lens planes
     vec dx = xo() - p.x;            //Distance from photon to object plane
     double s = dx.dot(mu) / ct;     //Travel distance from photon to object plane
-    double sl = s + So / ct;        //Travel distance from photon to lens plane
+    double sl = s - So / ct;        //Travel distance from photon to lens plane
     double r;
     
     //Figure out how far from the lens center the ray passes - if r > D/2, we're outside the aperture
-    vec vl = p.x + p.mu * sl - pos;
+    vec vl = (p.x + p.mu * sl) - pos;
+    //cerr << "I = " << p.W << "     " << vl << endl;
     r = vl.norm();
     if (r > D()/2)
         return;
@@ -94,8 +98,8 @@ void Camera::image(Photon& p, double n) {
     double xi, yi, M, si, ri;
     vec vo = p.x + p.mu*s;
     M = this->M();
-    xi = vo.dot(mu.perp(CONST_PI/2)) * M;
-    yi = vo.dot(mu.perp(0)) * M;
+    xi = vo.dot(right) * M;
+    yi = vo.dot(up) * M;
     
     //Store the Camera on the sensor
     int binx = (int)(xi/Lpx) + nx;
@@ -114,7 +118,7 @@ void Camera::image(Photon& p, double n) {
 }
 
 void Camera::setup() {
-    _xo = pos - mu * So;
+    _xo = pos + mu * So;
     _D = F/f;
     _M = F/(F-So);
     _cost = 2*So/sqrt(_D*_D + 4*So*So);
@@ -122,6 +126,8 @@ void Camera::setup() {
     _Si = 1.0/(1.0/F - 1.0/So);
     _t = 2 * f * Lpx * _Si / F;
     I = vector<double>((2*nx+1)*(2*ny+1),0);
+    right = mu.perp(CONST_PI/2);
+    up = mu.perp(0);
 };
 
 vec Camera::xo() const {

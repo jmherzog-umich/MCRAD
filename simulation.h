@@ -133,10 +133,6 @@ Simulation::Simulation() {
     Wmin = 1e-10; Wm = 0.1;
     Zres = 20; Rres = 20; Tres = 20; THres = 10; momentlvl = 4;
     flags = (Simulation::SimFlags)135;
-    imgIC = Image(5,5,2*beam.Rb/5, false);
-    imgR = Image(10,10,2*beam.Rb/5, ((int)flags & (int)SimFlags::Interference));
-    imgT = Image(10,10,2*beam.Rb/5, ((int)flags & (int)SimFlags::Interference));
-    cam = Camera(5, 1000, -1, 1.2, 50000, vec(100000,0,5000), vec(-1,0,0));
     printSteps = 0; storedFpaths = 0;
     tsim = 0; tfluor = 0; storepaths = 50; trackPhoton = 0;
 }
@@ -211,8 +207,6 @@ void Simulation::emitPhoton(const vec& x, double W0, double t0) {
     }
     
     //Emit the photon in stats
-    if (pt.W < Emin)
-        return;
     stats.emit(pt, pt.W);
     NEWPHOTONS.insert({pt.t, pt});
 };
@@ -222,7 +216,7 @@ void Simulation::genFluor() {
     //-Otherwise, emit all light
     
     //Initialize some values
-    int nf = 0;         //Number of packets we'll generate in this cell
+    int nf = 0;                         //Number of packets we'll generate in this cell
     double np = 0;
     double wp = 0;
     double ff;
@@ -357,6 +351,12 @@ void Simulation::setup() {
     //Create output stats block
     stats = Stats(Tres, THres, dT, dTf, momentlvl);
     stats.setup();
+    
+    //Create images and cameras
+    imgIC = Image(10,10,2*beam.Rb/5, false);
+    imgR = Image(10,10,2*beam.Rb/5, ((int)flags & (int)SimFlags::Interference));
+    imgT = Image(10,10,2*beam.Rb/5, ((int)flags & (int)SimFlags::Interference));
+    cam = Camera(10, L/50, -0.2, 1.2, 50000, vec(300000,0,L/2), vec(-1,0,0));   //M=-0.2
     
     //Setup grid
     if ((int)flags & (int)SimFlags::Cartesian)
@@ -765,10 +765,12 @@ void Simulation::run() {
                             imgR.image(PHOTONS.at(i).x.X, PHOTONS.at(i).x.Y, PHOTONS.at(i).W * (1-tempR), PHOTONS.at(i).phi());
                             
                         //Now image transmitted photon
-                        pt = Photon(PHOTONS.at(i));
-                        pt.mu = pt.mu * m + norm*(m*c - sqrt(1.0-m*m*(1-c*c)));
-                        pt.W = pt.W * (1-tempR);
-                        cam.image(pt);
+                        if (PHOTONS.at(i).W > Emin) {
+                            pt = Photon(PHOTONS.at(i));
+                            pt.mu = pt.mu * m + norm*(m*c - sqrt(1.0-m*m*(1-c*c)));
+                            pt.W = pt.W * (1-tempR);
+                            cam.image(pt);
+                        }
                         
                         //Update stats and photon
                         stats.reflect(PHOTONS.at(i), reflect, tempR, sint);
@@ -790,15 +792,17 @@ void Simulation::run() {
                     PHOTONS.at(i).S = 0;
                     break;
                 }
-            }
-            
-            //Terminate old packets
-            if (PHOTONS.at(i).W<=Emin && PHOTONS.at(i).W>0) {
-                eps = roll();
-                if (eps <= Wm)
-                    PHOTONS.at(i).W /= Wm;
-                else
-                    PHOTONS.at(i).W = 0;
+                
+                //Check if we should terminate this packet
+                if (PHOTONS.at(i).W <= Emin && PHOTONS.at(i).W > -CONST_EPS) {
+                    eps = roll();
+                    if (eps <= Wm)
+                        PHOTONS.at(i).W /= Wm;
+                    else {
+                        PHOTONS.at(i).W = 0;
+                        break;
+                    }
+                }
             }
         }
         
