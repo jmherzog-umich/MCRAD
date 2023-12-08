@@ -22,18 +22,20 @@ struct Medium {
             Blackbody=10, CCM1D=11, Binary=12 };
     enum struct AnisotropyModel { Constant=0 };
     enum struct PhaseFunction { HenyeyGreenstein=0, Rayleigh=1, Draine=2 };
+    enum struct SpectrumModel { Uniform=0, Cauchy=1, Gaussian=2 };
 
-    double _FQY;                //FQY of material
-    double _dens;               //Particle density um-3
-    double _n;                  //Refractive index
-    double _f;                  //Frequency of emitted photons
-    vector<double> _g;          //Phase function parameters
-    vector<double> _Ss;         //Scattering cross-section parameters
-    vector<double> _Sa;         //Absorption cross-section parameters
-    double _tau;                //Excited state lifetime
+    double _FQY;                        //FQY of material
+    double _dens;                       //Particle density um-3
+    double _n;                          //Refractive index
+    vector<double> _f;                          //Frequency of emitted photons
+    vector<double> _g;                  //Phase function parameters
+    vector<double> _Ss;                 //Scattering cross-section parameters
+    vector<double> _Sa;                 //Absorption cross-section parameters
+    double _tau;                        //Excited state lifetime
      
-    PhaseFunction phase;        //Phase function to use for calculation
-    CrossSectionModel xca, xcs; //Cross-section models for absorption and scattering
+    PhaseFunction phase;                //Phase function to use for calculation
+    CrossSectionModel xca, xcs;         //Cross-section models for absorption and scattering
+    SpectrumModel xce;                  //Fluorescence spectrum model
     
     void print() const;
     void print_at_f(double f) const;
@@ -111,7 +113,7 @@ string _phasemodelname(Medium::PhaseFunction f) {
 }
 
 double Medium::peak_v() const {
-    return _f;
+    return _f.at(0);
 }
 
 void Medium::print_at_f(double f) const {
@@ -143,7 +145,7 @@ Medium::Medium() {
     phase = PhaseFunction::HenyeyGreenstein;
     xcs = CrossSectionModel::Constant;
     xca = CrossSectionModel::Constant;
-    _f = 550; _Ss = {0.5}; _Sa = {0.1};
+    _f = {550}; _Ss = {0.5}; _Sa = {0.1};
     _dens = 1e-4; _n = 1.33;
     _tau = 1000;
 }
@@ -308,7 +310,7 @@ double Medium::emit_tau(double eps, double w) const {
 }
 
 double Medium::emit_v(double eps, double w) const {
-    return _f;
+    return _f.at(0);
 }
 
 void Medium::writedbheader(ofstream& OF) const {
@@ -346,14 +348,18 @@ bool Medium::set(const string& key, const vector<string>& val) {
         _dens = stod(val.at(0));
     else if (!key.compare("FQY"))
         _FQY = stod(val.at(0));
-    else if (!key.compare("femit"))
-        _f = stod(val.at(0));
-    else if (!key.compare("phase"))
+    else if (!key.compare("femit")) {
+        _f = vector<double>();
+        for (unsigned long int i = 0; i < val.size(); i ++)
+            _f.push_back(stod(val.at(i)));
+    } else if (!key.compare("phase"))
         phase = (Medium::PhaseFunction)stoul(val.at(0));
     else if (!key.compare("xca"))
         xca = (Medium::CrossSectionModel)stoul(val.at(0));
     else if (!key.compare("xcs"))
         xcs = (Medium::CrossSectionModel)stoul(val.at(0));
+    else if (!key.compare("xce"))
+        xce = (Medium::SpectrumModel)stoul(val.at(0));
     else
         return false;
     return true;

@@ -306,6 +306,10 @@ bool Beam::set(const string& key, const vector<string>& val) {
         Zb = stod(val.at(0));
     else if (!key.compare("Tb"))
         Tb = stod(val.at(0));
+    else if (!key.compare("wb"))
+        wb = stod(val.at(0));
+    else if (!key.compare("dwb"))
+        dwb = stod(val.at(0));
     else if (!key.compare("beamprofile"))
         beamprofile = (Beam::BeamType)stoul(val.at(0));
     else if (!key.compare("beamspread"))

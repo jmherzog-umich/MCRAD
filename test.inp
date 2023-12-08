@@ -1,6 +1,6 @@
-Ss 0.00001
-Sa 0 700 1
-xca 12
+Ss 1
+Sa 0.003
+xca 0
 xcs 0
 N0 5000000
 n0 1
@@ -25,10 +25,10 @@ cartesian 1
 periodicxy 0
 fluorescence 1
 timedependent 0
-singlephoton 0
+singlephoton 1
 beamprofile 0
 beamspread 1
 dbfile test.csv
-exportpaths 0
+exportpaths 100
 pathbasefilename test
 exec

@@ -233,6 +233,7 @@ void Camera::print() const {
 }
 
 void Camera::printGrid() const {
+    cout << "NOTE: CAMERA SIMULATION MODULE IS NOT COMPLETE. DO NOT RELY ON THESE RESULTS. " << endl;
     cout << "Image domain (W,H):   " << (2*nx+1)*Lpx/abs(M()) << " x " << (2*ny+1)*Lpx/abs(M()) << " um";
     cout << endl << "  X:     ";
     for (int i = -nx; i <= nx; i ++) cout << scientific << setw(18) << i*Lpx/abs(M());
@@ -245,6 +246,7 @@ void Camera::printSetup() const {
     vec right = mu.perp(CONST_PI/2);
     vec up = mu.perp(0);
     
+    cout << "NOTE: CAMERA SIMULATION MODULE IS NOT COMPLETE. DO NOT RELY ON THESE RESULTS. " << endl;
     cout << "Camera lens focal length: " << fixed << F/1000 << " mm" << endl;
     cout << "Camera lens f-number: " << fixed << f << endl;
     cout << "Camera lens magnification: " << fixed << M() << endl;
@@ -263,13 +265,11 @@ void Camera::printSetup() const {
     cout << "Lens position: " << "<" << fixed << pos.X/1000 << ", " << pos.Y/1000 << ", " << pos.Z/1000 << "> mm" << endl;
     cout << "Lens normal: " << "<" << fixed << mu.X << ", " << mu.Y << ", " << mu.Z << ">" << endl;
     cout << "Camera x-direction: " << "<" << fixed << right.X << ", " << right.Y << ", " << right.Z << ">" << endl;
-    cout << "Camera y-direction: " << "<" << fixed << up.X << ", " << up.Y << ", " << up.Z << ">" << endl << endl;
-    
-    cout << "NOT IMPLEMENTED YET" << endl;
-    cout << "Filter bands: " << fmin << "   to   " << fmax << " THz" << endl;
-    cout << "Gate time: " << ton << "   to   " << toff << " ps" << endl;
-    cout << "Diffraction: " << ((diffraction) ? "True" : "False") << endl;
-    cout << "Interference: " << ((interfere) ? "True" : "False") << endl;
+    cout << "Camera y-direction: " << "<" << fixed << up.X << ", " << up.Y << ", " << up.Z << ">" << endl;
+    cout << "<NOT IMPLEMENTED YET> Filter bands: " << fmin << "   to   " << fmax << " THz" << endl;
+    cout << "<NOT IMPLEMENTED YET> Gate time: " << ton << "   to   " << toff << " ps" << endl;
+    cout << "<NOT IMPLEMENTED YET> Diffraction: " << ((diffraction) ? "True" : "False") << endl;
+    cout << "<NOT IMPLEMENTED YET> Interference: " << ((interfere) ? "True" : "False") << endl;
     if (interfere)
         cout << "      " << ((subjective) ? "Subjective" : "Objective") << " interference pattern" << endl;
     cout << endl;

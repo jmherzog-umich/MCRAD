@@ -590,7 +590,7 @@ void Stats::print() const {
     
     //Theta-dependent reflection/transmission/fluorescence
     cout<<endl;
-    cout<<"cos(theta):     ";
+    cout<<"theta:      ";
     for (int i = 0; i < THETAres; i ++)
         cout << fixed << setw(18) << i*dTHETA;
     cout<<endl;
@@ -825,11 +825,12 @@ void Stats::print() const {
     if (FGEN > CONST_EPS)
         cout << "     " << "  Fabs       = " << fixed << setw(10) << FDEP/PHI;
     cout << endl << "  A          = " << fixed << setw(10) << ADEP/PHI << endl << endl;
-    cout << "1 - (Rd + Rs + Td + A + Ld)   ?=  0  =  " << 1-(Rdiffuse + Rspec + Tdiffuse + ADEP + Ldiffuse) / PHI << endl;
+    cout << endl << "Checking for math errors:" << endl;
+    cout << "     1 - (Rd + Rs + Td + A + Ld)   ?=  0  =  " << 1-(Rdiffuse + Rspec + Tdiffuse + ADEP + Ldiffuse) / PHI << endl;
     if (FGEN > CONST_EPS)
-        cout << "Fg - (Ff + Fb + Fl + Fa)      ?=  0  =  " << (FGEN - Ff - Fb - Fl - FDEP) / PHI << endl;
+        cout << "     Fg - (Ff + Fb + Fl + Fa)      ?=  0  =  " << (FGEN - Ff - Fb - Fl - FDEP) / PHI << endl;
     if (FGEN > CONST_EPS)
-        cout << "Fg / Fabs   =  " << FGEN / ADEP << endl;
+        cout << "     Fg / Fabs   =  " << FGEN / ADEP << endl;
     
     //Reflection time/order
     cout << endl << endl;
