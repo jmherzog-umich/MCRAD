@@ -77,7 +77,7 @@ The parameter/command definitions are as follows:
 | femit | Emitted photon frequency parameter(s) (floating point) |
 | dens | Particle density (per cubic micron) |
 | phase | Scattering phase-function (enum value) |
-| --- | --- |
+|  |  |
 | N0 | Initial number of photon packets |
 | n0 | Front surface refractive index |
 | nx | Rear surface refractive index |
@@ -90,12 +90,12 @@ The parameter/command definitions are as follows:
 | Zres | Number of grid points in depth direction |
 | THres | Number of grid points in angular direction |
 | Tres | Number of grid points in temporal direction |
-| --- | --- |
+|  |  |
 | Wmin | Packet weight at which to begin roulette procedure |
 | Wm | Minimum packet weight if packet survives roulette procedure |
 | maxstep | Max number of steps before abandoning calculation |
 | moments | Stores and calculates moments up to this order (integer, 1-4) |
-| --- | --- |
+|  |  |
 | backwall | Enable back wall (boolean 1 or 0) |
 | frontwall | Enable front wall (boolean 1 or 0) |
 | sidewall | Enable side wall (boolean 1 or 0) |
@@ -107,7 +107,7 @@ The parameter/command definitions are as follows:
 | singlephoton | Enable single-photon mode (boolean 1 or 0) |
 | interference | NOT YET IMPLEMENTED: account for interference effects in images (boolean 1 or 0) |
 | saturation | TESTING: account for saturation of absorbers based on grid resolution (boolean 1 or 0) |
-| --- | --- |
+|  |  |
 | Rb | Source beam radius (micron) |
 | Rbmax | Maximum radius at which photons will be generated (micron) |
 | beamprofile | Beam profile shape (enum value) |
@@ -122,13 +122,13 @@ The parameter/command definitions are as follows:
 | Tb | Temporal width of beam (picoseconds) |
 | wb | Peak frequency of beam (THz) |
 | dwb | Frequency width of beam (THz) |
-| --- | --- |
+|  |  |
 | trackphoton | DEBUG: prints to stderr the status of the photon stored at this index at each step (integer) |
 | printsteps | Prints the grid data to the output file every 'printsteps' steps (integer) [Useful for time- or order-resolved data] |
 | dbfile | Output filename (CSV) to store scalar results (string) |
 | exportpaths | Number of paths (X-Y-Z-T values) to store to disk (integer) |
 | pathbasefilename | Base filename of path.xyz file (string) |
-| --- | --- |
+|  |  |
 | run | Runs simulation immediately |
 | setup | Runs setup calculations based on currently set inputs |
 | genBeam | Randomly samples the beam settings and generates initial photons |
