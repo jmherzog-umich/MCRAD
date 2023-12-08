@@ -151,7 +151,8 @@ absorption cross-section is 0.003 square microns for frequencies larger than 700
 and 0 for frequencies below 700 THz.
 
 Currently, non-constant parameters are not fully supported so please refer to the
-code for details on how to specify multi-parameter models.
+code for details on how to specify multi-parameter models. Time-dependent fluorescence
+simulations are also experimental and their implementation may change in the future.
 
 ## Future work
 Several features are planned as indicated in the previous section:
