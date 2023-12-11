@@ -28,7 +28,6 @@
 #define CONST_C  299.8
 #define CONST_PI 3.1415926535
 #define CONST_EPS 1e-10
-#define CONST_FRES 0.1
 
 using namespace std;
 
@@ -79,7 +78,7 @@ class Simulation {
         double L=1e4;                   //Length of sample [um]
         double R=1e4;                   //Radius of sample [um]
         double dT=1;                    //Time step in simulation
-        double dTf = 0;                 //Time step for fluorescence
+        double dTf = 100;               //Time step for fluorescence
         
         //Sim Flags
         SimFlags flags = (Simulation::SimFlags)3;
@@ -128,7 +127,7 @@ class Simulation {
 Simulation::Simulation() {
     //Set default parameters
     n0=1.600; nx=1.600; nr=1.600;
-    L=1e4; R=1e4; dT=1; dTf = 0;
+    L=1e4; R=1e4; dT=1; dTf = 100;
     N0 = 1e6; maxstep = 5e6;
     Wmin = 1e-10; Wm = 0.1;
     Zres = 20; Rres = 20; Tres = 20; THres = 10; momentlvl = 4;
@@ -344,10 +343,6 @@ void Simulation::printsettings() const {
 }
 
 void Simulation::setup() {
-    //Fluorescence timescale
-    if (dTf < CONST_EPS)
-        dTf = CONST_FRES * medium.tau();
-
     //Create output stats block
     stats = Stats(Tres, THres, dT, dTf, momentlvl);
     stats.setup();
@@ -951,6 +946,8 @@ bool Simulation::set(const string &key, const vector<string>& val) {
         R = stod(val.at(0));
     else if (!key.compare("dT"))
         dT = stod(val.at(0));
+    else if (!key.compare("dTf"))
+        dTf = stod(val.at(0));
     else if (!key.compare("Wm"))
         Wm = stod(val.at(0));
     else if (!key.compare("Wmin"))

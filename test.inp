@@ -10,11 +10,12 @@ nr 1
 Rres 20
 Zres 20
 THres 20
-Tres 200
-dens 0.0005
+Tres 500
+dens 0.5
 R 10000
-L 10000
-dT 0.01
+L 1000
+dT 0.1
+dTf 20
 Rb 1
 Rbmax 1
 phase 0
@@ -24,7 +25,7 @@ sidewall 1
 cartesian 1
 periodicxy 0
 fluorescence 1
-timedependent 0
+timedependent 1
 singlephoton 1
 beamprofile 0
 beamspread 1
