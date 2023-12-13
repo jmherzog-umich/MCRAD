@@ -12,7 +12,7 @@ win64: mcrad.cpp photon.h stats.h vec.h simulation.h utility.h medium.h beam.h c
 	$(CXXW64) -std=c++17 -static -Ofast -o mcrad.W64.exe mcrad.cpp photon.h stats.h vec.h simulation.h utility.h medium.h beam.h camera.h image.h raypath.h -Wall
 	
 debug: mcrad.cpp photon.h stats.h vec.h simulation.h utility.h medium.h beam.h camera.h image.h raypath.h
-	$(CXX) -std=c++17 -Og -fsanitize=address,undefined -o mcrad.o mcrad.cpp photon.h stats.h vec.h simulation.h utility.h medium.h beam.h camera.h image.h raypath.h -Wall -g -rdynamic -D_DEBUG
+	$(CXX) -std=c++17 -Og -fsanitize=address,undefined -o mcrad.o mcrad.cpp photon.h stats.h vec.h simulation.h utility.h medium.h beam.h camera.h image.h raypath.h -Wall -Wuninitialized -Wextra -g -rdynamic -D_DEBUG
 	
 clean:
 	rm -f mcrad.o mcrad.W32.exe mcrad.W64.exe

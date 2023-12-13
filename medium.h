@@ -4,6 +4,8 @@
 #include <iomanip>
 #include <vector>
 
+#include "utility.h"
+
 #ifndef _MEDIUM_H_
 #define _MEDIUM_H_
 
@@ -17,25 +19,20 @@ using namespace std;
 struct Medium {
 
     //Function definitions for wavelength dependence in cross-sections and g, and 
-    enum struct CrossSectionModel { Constant=0, Gaussian=1, Cauchy=2, Exponential=3,
-            Polynomial=4, Rayleigh=5, PowerLaw=6, ADTsphere=7, ADTcyl=8, ADTpath=9,
-            Blackbody=10, CCM1D=11, Binary=12 };
+    enum struct SpectrumModel { Constant=0, Gaussian=1, Cauchy=2, Laplace=3, Impulse=4, Rayleigh=5, Binary=12, Uniform=13 };
     enum struct AnisotropyModel { Constant=0 };
     enum struct PhaseFunction { HenyeyGreenstein=0, Rayleigh=1, Draine=2 };
-    enum struct SpectrumModel { Uniform=0, Cauchy=1, Gaussian=2 };
 
-    double _FQY;                        //FQY of material
     double _dens;                       //Particle density um-3
     double _n;                          //Refractive index
-    vector<double> _f;                          //Frequency of emitted photons
+    vector<double> _f;                  //Frequency of emitted photons
     vector<double> _g;                  //Phase function parameters
     vector<double> _Ss;                 //Scattering cross-section parameters
     vector<double> _Sa;                 //Absorption cross-section parameters
     double _tau;                        //Excited state lifetime
      
     PhaseFunction phase;                //Phase function to use for calculation
-    CrossSectionModel xca, xcs;         //Cross-section models for absorption and scattering
-    SpectrumModel xce;                  //Fluorescence spectrum model
+    SpectrumModel xca, xcs, xf;        //Cross-section models for absorption and scattering
     
     void print() const;
     void print_at_f(double f) const;
@@ -46,6 +43,7 @@ struct Medium {
     
     double dens() const;
     double FQY() const;
+    double FQY(double w) const;
     double g(double w = 0) const;
     double g2(double w = 0) const;
     double tau() const;
@@ -84,21 +82,16 @@ struct Medium {
     
 };
 
-string _xcmodelname(Medium::CrossSectionModel x) {
+string _xcmodelname(Medium::SpectrumModel x) {
     switch (x) {
-        case Medium::CrossSectionModel::Constant: return "Constant"; break;
-        case Medium::CrossSectionModel::Gaussian: return "Gaussian"; break;
-        case Medium::CrossSectionModel::Cauchy: return "Cauchy"; break;
-        case Medium::CrossSectionModel::Exponential: return "Exponential"; break;
-        case Medium::CrossSectionModel::Polynomial: return "Polynomial"; break;
-        case Medium::CrossSectionModel::Rayleigh: return "Rayleigh"; break;
-        case Medium::CrossSectionModel::PowerLaw: return "PowerLaw"; break;
-        case Medium::CrossSectionModel::ADTsphere: return "ADTsphere"; break;
-        case Medium::CrossSectionModel::ADTcyl: return "ADTcyl"; break;
-        case Medium::CrossSectionModel::ADTpath: return "ADTpath"; break;
-        case Medium::CrossSectionModel::Blackbody: return "Blackbody"; break;
-        case Medium::CrossSectionModel::CCM1D: return "CCM1D"; break;
-        case Medium::CrossSectionModel::Binary: return "Binary"; break;
+        case Medium::SpectrumModel::Constant: return "Constant"; break;
+        case Medium::SpectrumModel::Gaussian: return "Gaussian"; break;
+        case Medium::SpectrumModel::Cauchy: return "Cauchy"; break;
+        case Medium::SpectrumModel::Laplace: return "Laplace"; break;
+        case Medium::SpectrumModel::Binary: return "Binary"; break;
+        case Medium::SpectrumModel::Uniform: return "Uniform"; break;
+        case Medium::SpectrumModel::Impulse: return "Impulse"; break;
+        case Medium::SpectrumModel::Rayleigh: return "Rayleigh"; break;
         default: return "Other"; break;
     }
 }
@@ -112,15 +105,11 @@ string _phasemodelname(Medium::PhaseFunction f) {
     }
 }
 
-double Medium::peak_v() const {
-    return _f.at(0);
-}
-
 void Medium::print_at_f(double f) const {
     cout << "   Medium refractive index: " << n(f) << endl;
     cout << "   Scattering anisotropy <cos theta>: " << g(f) << endl;
-    cout << "   Integrated scattering cross-section: " << Ss(f) << " um2" << endl;
-    cout << "   Integrated absorption cross-section: " << Sa(f) << " um2" << endl;
+    cout << "   Scattering cross-section: " << Ss(f) << " um2" << endl;
+    cout << "   Absorption cross-section: " << Sa(f) << " um2" << endl;
     cout << "   Albedo: " << albedo(f) << endl;
     
     //Print MFPs
@@ -135,51 +124,132 @@ void Medium::print_at_f(double f) const {
 void Medium::print() const {
     cout << "Phase function: " << _phasemodelname(phase) << endl;
     cout << "Absorption cross-section model: " << _xcmodelname(xca) << endl;
+    cout << "   Integrated absorption cross-section: " << Sa() << " um2" << endl;
     cout << "Scattering cross-section model: " << _xcmodelname(xcs) << endl;
+    cout << "   Integrated scattering cross-section: " << Ss() << " um2" << endl;
     cout << "Medium density: " << dens() << " um-3" << endl;
-    cout << "Fluorescence quantum yield: " << FQY() << endl << endl;
+    cout << "Fluorescence spectrum model: " << _xcmodelname(xf) << endl;
+    cout << "   Integrated fluorescence quantum yield: " << FQY() << endl;
+    cout << "   Peak fluorescence quantum yield: " << FQY(peak_v()) << " THz-1" << endl << endl;
 }
 
 Medium::Medium() {
-    _g = {0.98, 1}; _FQY = 1;
+    _g = {0.98, 1};
     phase = PhaseFunction::HenyeyGreenstein;
-    xcs = CrossSectionModel::Constant;
-    xca = CrossSectionModel::Constant;
-    _f = {550}; _Ss = {0.5}; _Sa = {0.1};
+    xcs = SpectrumModel::Constant;
+    xca = SpectrumModel::Constant;
+    xf = SpectrumModel::Impulse;
+    _f = {1, 550}; _Ss = {0.5}; _Sa = {0.1};
     _dens = 1e-4; _n = 1.33;
     _tau = 1000;
 }
 
 //Actually implement these
-double _evalXc(Medium::CrossSectionModel x, double w, const vector<double>& S) {
+double _evalSpec(Medium::SpectrumModel x, double w, const vector<double>& S) {
     switch (x) {
         default:
-        case Medium::CrossSectionModel::Constant :
+        case Medium::SpectrumModel::Constant :
             return S.at(0);
             break;
-        case Medium::CrossSectionModel::Gaussian :
+        case Medium::SpectrumModel::Gaussian :
             return S.at(0) / S.at(2) / sqrt(2.*CONST_PI) * exp(-pow((w-S.at(1))/S.at(2),2)/2);
             break;
-        case Medium::CrossSectionModel::Cauchy :
+        case Medium::SpectrumModel::Cauchy :
             return S.at(0) / CONST_PI / S.at(2) / (1 + pow((w-S.at(1))/S.at(2),2));
             break;
-        case Medium::CrossSectionModel::Exponential :
+        case Medium::SpectrumModel::Laplace :
             return S.at(0)/2.0/S.at(2) * exp(-abs(w-S.at(1))/S.at(2));
             break;
-        case Medium::CrossSectionModel::Binary :
+        case Medium::SpectrumModel::Binary :
             return (w>S.at(1)) ? S.at(2) : S.at(0);
-        case Medium::CrossSectionModel::Polynomial :
-        case Medium::CrossSectionModel::Rayleigh :
-        case Medium::CrossSectionModel::PowerLaw :
-        case Medium::CrossSectionModel::ADTsphere :
-        case Medium::CrossSectionModel::ADTcyl :
-        case Medium::CrossSectionModel::ADTpath :
-        case Medium::CrossSectionModel::Blackbody :
-        case Medium::CrossSectionModel::CCM1D :
-            return 0;
             break;
+        case Medium::SpectrumModel::Impulse :
+            return (abs(w-S.at(1)) < CONST_EPS) ? S.at(0) : 0;
+            break;
+        case Medium::SpectrumModel::Uniform : 
+            if (w <= S.at(2) and w >= S.at(1))
+                return S.at(0);
+            else
+                return 0;
+            break;
+        case Medium::SpectrumModel::Rayleigh :
+            return S.at(0) * pow(w, 4);
     }
     return S.at(0);
+}
+
+double _meanSpec(Medium::SpectrumModel x, const vector<double>& S) {
+    double tmp;
+    switch (x) {
+        case Medium::SpectrumModel::Constant :
+        case Medium::SpectrumModel::Rayleigh :
+            return HUGE_VAL;
+            break;
+        case Medium::SpectrumModel::Binary :
+            tmp = S.at(2)/(S.at(1)+S.at(2));
+            return S.at(1) - S.at(1)*(tmp - 0.5);
+            break;
+        case Medium::SpectrumModel::Uniform :
+            return (S.at(1) + S.at(2))/2.0;
+            break;
+        case Medium::SpectrumModel::Gaussian :
+        case Medium::SpectrumModel::Cauchy :
+        case Medium::SpectrumModel::Laplace :
+        case Medium::SpectrumModel::Impulse :
+            return S.at(1);
+            break;
+        default:
+            cerr << "Error: no mean available for spectrum model """ << _xcmodelname(x) << """" << endl;
+            exit(-1);
+            return 0;
+    }
+}
+
+double _sampleSpec(Medium::SpectrumModel x, double eps, const vector<double>& S) {
+    double tmp;
+    switch (x) {            
+        case Medium::SpectrumModel::Constant :
+            return (eps/S.at(0));
+            break;
+        case Medium::SpectrumModel::Binary :
+            tmp = S.at(1)/(S.at(1)+S.at(2));
+            return ( eps <= tmp ) ? (S.at(0)*eps/tmp) : (S.at(0)*(1.0 + (eps-tmp)/(1-tmp)));
+            break;
+        case Medium::SpectrumModel::Uniform : 
+            return S.at(1) + (S.at(2)-S.at(1))*eps;
+            break;
+        case Medium::SpectrumModel::Gaussian :
+            return S.at(2) * erfinvf((float)eps) + S.at(1);
+            break;
+        case Medium::SpectrumModel::Cauchy :
+            return S.at(1) + S.at(2) * tan(CONST_PI * (eps-0.5));
+            break;
+        case Medium::SpectrumModel::Laplace :
+            return S.at(1) + S.at(2) * ( (eps <= 0.5) ? log(2*eps) : -log(2-2*eps) );
+            break;
+        case Medium::SpectrumModel::Impulse :
+            return S.at(1);
+            break;
+        default:
+        case Medium::SpectrumModel::Rayleigh :
+            //Can't sample these
+            cerr << "Error sampling spectrum model """ << _xcmodelname(x) << """" << endl;
+            exit(-1);
+            return 0;
+    }
+}
+
+double _normSpec(Medium::SpectrumModel x, const vector<double>& S) {
+    if (x == Medium::SpectrumModel::Constant)
+        return HUGE_VAL;
+    if (x == Medium::SpectrumModel::Binary)
+        return S.at(1)*(S.at(0)+S.at(2));
+    else
+        return S.at(0);
+}
+
+double Medium::peak_v() const {
+    return _meanSpec(xf, _f);
 }
 
 double Medium::g(double w) const {
@@ -192,16 +262,16 @@ double Medium::g2(double w) const {
         return 0;
 }
 double Medium::Ss(double w) const {
-    return _evalXc(xcs, w, _Ss);
+    return _evalSpec(xcs, w, _Ss);
 }
 double Medium::Sa(double w) const {
-    return _evalXc(xca, w, _Sa);
+    return _evalSpec(xca, w, _Sa);
 }
 double Medium::Ss() const {
-    return _Ss.at(0);
+    return _normSpec(xcs, _Ss);
 }
 double Medium::Sa() const {
-    return _Sa.at(0);
+    return _normSpec(xca, _Sa);
 }
 double Medium::dens() const {
     return _dens;
@@ -210,7 +280,10 @@ double Medium::n(double w) const {
     return _n;
 }
 double Medium::FQY() const {
-    return _FQY;
+    return _normSpec(xf, _f);
+}
+double Medium::FQY(double w) const {
+    return _evalSpec(xf, w, _f);
 }
 double Medium::tau() const {
     return _tau;
@@ -309,12 +382,12 @@ double Medium::emit_tau(double eps, double w) const {
     return _tau * eps;
 }
 
-double Medium::emit_v(double eps, double w) const {
-    return _f.at(0);
+double Medium::emit_v(double eps, double ) const {
+    return _sampleSpec(xf, eps, _f);
 }
 
 void Medium::writedbheader(ofstream& OF) const {
-    OF << "n,dens,phaseFxn,xca,xcs,g,Ss,Sa,a";
+    OF << "n,dens,phaseFxn,xca,xcs,xf,g,Ss,Sa,a,tau,FQY";
 }
 
 void Medium::writedb(ofstream& OF) const {
@@ -323,10 +396,13 @@ void Medium::writedb(ofstream& OF) const {
     OF << _phasemodelname(phase) << ",";
     OF << _xcmodelname(xca) << ",";
     OF << _xcmodelname(xcs) << ",";
+    OF << _xcmodelname(xf) << ",";
     OF << scientific << setprecision(8) << g() << ",";
     OF << scientific << setprecision(8) << Ss() << ",";
     OF << scientific << setprecision(8) << Sa() << ",";
     OF << scientific << setprecision(8) << albedo();
+    OF << scientific << setprecision(8) << tau();
+    OF << scientific << setprecision(8) << FQY();
 }
 
 bool Medium::set(const string& key, const vector<string>& val) {
@@ -346,20 +422,20 @@ bool Medium::set(const string& key, const vector<string>& val) {
         _n = stod(val.at(0));
     else if (!key.compare("dens"))
         _dens = stod(val.at(0));
-    else if (!key.compare("FQY"))
-        _FQY = stod(val.at(0));
     else if (!key.compare("femit")) {
         _f = vector<double>();
         for (unsigned long int i = 0; i < val.size(); i ++)
             _f.push_back(stod(val.at(i)));
     } else if (!key.compare("phase"))
         phase = (Medium::PhaseFunction)stoul(val.at(0));
+    else if (!key.compare("tau"))
+        _tau = stod(val.at(0));
     else if (!key.compare("xca"))
-        xca = (Medium::CrossSectionModel)stoul(val.at(0));
+        xca = (Medium::SpectrumModel)stoul(val.at(0));
     else if (!key.compare("xcs"))
-        xcs = (Medium::CrossSectionModel)stoul(val.at(0));
-    else if (!key.compare("xce"))
-        xce = (Medium::SpectrumModel)stoul(val.at(0));
+        xcs = (Medium::SpectrumModel)stoul(val.at(0));
+    else if (!key.compare("xf"))
+        xf = (Medium::SpectrumModel)stoul(val.at(0));
     else
         return false;
     return true;

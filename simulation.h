@@ -193,9 +193,9 @@ void Simulation::emitPhoton(const vec& x, double W0, double t0) {
     //Create fluorescence photon
     pt.x = x;
     pt.mu = vec(eps * sint, sqrt(1-eps*eps)*sint, sqrt(1-sint*sint));
-    pt.W = W0;
     pt.t = t0;
     pt.v = medium.emit_v(roll());
+    pt.W = W0 * medium.FQY(pt.v);
     pt.S = logroll();
     pt.flags = (Photon::PhotonFlags)5;
     
@@ -233,8 +233,8 @@ void Simulation::genFluor() {
         //Cache index
         ii = it.index();
         
-        //Figure out how many photons emitted at this time step
-        np = medium.FQY() * grid.at(4, ii) * (1.0 - ff);
+        //Figure out how many particles decay at this time step
+        np = grid.at(4, ii) * (1.0 - ff);
         
         //See if this cell is OK
         if (np < Emin)
@@ -529,7 +529,7 @@ void Simulation::run() {
                             //Generate fluorescence photons
                             if (((int)flags & (int)SimFlags::Fluorescence) && (!PHOTONS.at(i).isFluorescence())) {
                                 grid.at(4, ii,jj,kk) += PHOTONS.at(i).W;
-                                emitPhoton(PHOTONS.at(i).x, PHOTONS.at(i).W * medium.FQY(), tsim + medium.emit_tau(logroll()));
+                                emitPhoton(PHOTONS.at(i).x, PHOTONS.at(i).W, tsim + medium.emit_tau(logroll()));
                             }
                             
                             //And kill the photon
@@ -1168,6 +1168,7 @@ void Simulation::write(string s) const {
 }
 
 void Simulation::exec(const vector<string>& args) {
+    cerr << "Got here!" << endl;
     //Loop through args and parse them
     string cmd;
     vector<string> arg;
