@@ -9,9 +9,11 @@
 #ifndef _BEAM_H_
 #define _BEAM_H_
 
-#define CONST_PI 3.1415926535
-#define CONST_EPS 1e-10
-#define CONST_HBAR 1.0545718176e-22
+#define CONST_PI   3.1415926535897932
+#define CONST_C    299.792458
+#define CONST_HBAR 1.054571817679489e-22
+#define CONST_HK   7.6382325822577381
+#define CONST_EPS  1e-10
 
 using namespace std;
 
@@ -290,35 +292,29 @@ void Beam::writedb(ofstream& OF) const {
 }
 
 bool Beam::set(const string& key, const vector<string>& val) {
-    if (!key.compare("E"))
+    if (!key.compare("beam-photons-per-packet"))
         E = stod(val.at(0));
-    else if (!key.compare("sin0"))
+    else if (!key.compare("beam-initial-angle"))
         sin0 = stod(val.at(0));
-    else if (!key.compare("Rb"))
-        Rb = max(1.0, stod(val.at(0)));
-    else if (!key.compare("Rbmax"))
+    else if (!key.compare("beam-radius-cutoff"))
         Rmax = stod(val.at(0));
-    else if (!key.compare("Pb"))
-        Pb = stod(val.at(0));
-    else if (!key.compare("Sb"))
-        Sb = stod(val.at(0));
-    else if (!key.compare("Zb"))
+    else if (!key.compare("beam-focal-depth"))
         Zb = stod(val.at(0));
-    else if (!key.compare("Tb"))
+    else if (!key.compare("beam-profile")) {
+        Rb = max(1.0, stod(val.at(0)));
+        beamprofile = (val.size()>1) ? (Beam::BeamType)stoul(val.at(1)) : Beam::BeamType::Uniform;
+        if (val.size() > 2) Sb = stod(val.at(2));
+    } else if (!key.compare("beam-divergence")) {
+        Pb = stod(val.at(0));
+        spreadfxn = (val.size()>1) ? (Beam::BeamSpread)stoul(val.at(1)) : Beam::BeamSpread::Gaussian;
+    } else if (!key.compare("beam-pulse-duration")) {
         Tb = stod(val.at(0));
-    else if (!key.compare("wb"))
+        beamdur = (val.size()>1) ? (Beam::BeamDuration)stoul(val.at(1)) : Beam::BeamDuration::Uniform;
+    } else if (!key.compare("beam-spectrum")) {
         wb = stod(val.at(0));
-    else if (!key.compare("dwb"))
-        dwb = stod(val.at(0));
-    else if (!key.compare("beamprofile"))
-        beamprofile = (Beam::BeamType)stoul(val.at(0));
-    else if (!key.compare("beamspread"))
-        spreadfxn = (Beam::BeamSpread)stoul(val.at(0));
-    else if (!key.compare("beamwidth"))
-        beamdur = (Beam::BeamDuration)stoul(val.at(0));
-    else if (!key.compare("beamspec"))
-        beamspec = (Beam::BeamSpectrum)stoul(val.at(0));
-    else
+        beamspec = (val.size()>1) ? (Beam::BeamSpectrum)stoul(val.at(1)) : Beam::BeamSpectrum::Uniform;
+        if (val.size() > 2) dwb = stod(val.at(2));
+    } else
         return false;
     return true;
 }

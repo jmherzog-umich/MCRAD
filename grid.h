@@ -9,7 +9,11 @@
 #include "vec.h"
 #include "utility.h"
 
-#define CONST_EPS 1e-10
+#define CONST_PI   3.1415926535897932
+#define CONST_C    299.792458
+#define CONST_HBAR 1.054571817679489e-22
+#define CONST_HK   7.6382325822577381
+#define CONST_EPS  1e-10
 
 #ifndef __GRID_H
 #define __GRID_H

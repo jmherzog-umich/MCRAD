@@ -25,9 +25,11 @@
 #ifndef _SIMINFO_H_
 #define _SIMINFO_H_
 
-#define CONST_C  299.8
-#define CONST_PI 3.1415926535
-#define CONST_EPS 1e-10
+#define CONST_PI   3.1415926535897932
+#define CONST_C    299.792458
+#define CONST_HBAR 1.054571817679489e-22
+#define CONST_HK   7.6382325822577381
+#define CONST_EPS  1e-10
 
 using namespace std;
 
@@ -79,6 +81,8 @@ class Simulation {
         double R=1e4;                   //Radius of sample [um]
         double dT=1;                    //Time step in simulation
         double dTf = 100;               //Time step for fluorescence
+        double Fmin = 400;              //Minimum frequency for the simulation
+        double Fmax = 1000;             //Maximum frequency for the simulation
         
         //Sim Flags
         SimFlags flags = (Simulation::SimFlags)3;
@@ -101,6 +105,7 @@ class Simulation {
         unsigned int Rres = 20;
         unsigned int Tres = 20;
         unsigned int THres = 10;
+        unsigned int Fres = 20;
         unsigned int momentlvl = 4;
         unsigned int printSteps = 0;
         unsigned long int trackPhoton = 0;
@@ -195,7 +200,7 @@ void Simulation::emitPhoton(const vec& x, double W0, double t0) {
     pt.mu = vec(eps * sint, sqrt(1-eps*eps)*sint, sqrt(1-sint*sint));
     pt.t = t0;
     pt.v = medium.emit_v(roll());
-    pt.W = W0 * medium.FQY(pt.v);
+    pt.W = W0 * medium.FQY();
     pt.S = logroll();
     pt.flags = (Photon::PhotonFlags)5;
     
@@ -206,7 +211,7 @@ void Simulation::emitPhoton(const vec& x, double W0, double t0) {
     }
     
     //Emit the photon in stats
-    stats.emit(pt, pt.W);
+    stats.emit(pt);
     NEWPHOTONS.insert({pt.t, pt});
 };
 
@@ -290,6 +295,7 @@ void Simulation::printsettings() const {
     cout << "Periodic Z: " << (((int)flags & (int)SimFlags::PeriodicZ) ? "True" : "False" ) << endl;
     cout << "Photon packets: " << N0 << endl;
     cout << "Total photons: " << stats.PHI << endl;
+    cout << "Frequency range: " << Fmin << " - " << Fmax << " THz" << endl;
     cout << "Simulation time-step: " << dT << " ps" << endl;
     if (((int)flags & (int)SimFlags::TimeResolved) && ((int)flags & (int)SimFlags::Fluorescence))
         cout << "Fluorescence time-step: " << dTf << " ps" << endl;
@@ -344,8 +350,10 @@ void Simulation::printsettings() const {
 
 void Simulation::setup() {
     //Create output stats block
-    stats = Stats(Tres, THres, dT, dTf, momentlvl);
+    stats = Stats(Tres, THres, Fres, dT, dTf, Fmin, Fmax, momentlvl);
     stats.setup();
+    medium.Fmin = Fmin;
+    medium.Fmax = Fmax;
     
     //Create images and cameras
     imgIC = Image(10,10,2*beam.Rb/5, false);
@@ -932,119 +940,124 @@ bool Simulation::set(const string &key, const vector<string>& val) {
         return true;
     
     //If we're here, the key either belongs to Simulation or doesn't exist
-    if (!key.compare("n0"))
+    if (!key.compare("index-front"))
         n0 = stod(val.at(0));
-    else if (!key.compare("nx"))
+    else if (!key.compare("index-back"))
         nx = stod(val.at(0));
-    else if (!key.compare("nr"))
+    else if (!key.compare("index-side"))
         nr = stod(val.at(0));
-    else if (!key.compare("N0"))
+    else if (!key.compare("simulation-packets"))
         N0 = stoul(val.at(0));
-    else if (!key.compare("L"))
+    else if (!key.compare("simulation-length"))
         L = stod(val.at(0));
-    else if (!key.compare("R"))
+    else if (!key.compare("simulation-radius"))
         R = stod(val.at(0));
-    else if (!key.compare("dT"))
+    else if (!key.compare("simulation-timestep"))
         dT = stod(val.at(0));
-    else if (!key.compare("dTf"))
+    else if (!key.compare("simulation-frequency-range")) {
+        Fmin = stod(val.at(0));
+        Fmax = stod(val.at(1));
+    } else if (!key.compare("simulation-timestep-fluorescence"))
         dTf = stod(val.at(0));
-    else if (!key.compare("Wm"))
+    else if (!key.compare("roulette-newweight"))
         Wm = stod(val.at(0));
-    else if (!key.compare("Wmin"))
+    else if (!key.compare("roulette-minweight"))
         Wmin = stod(val.at(0));
-    else if (!key.compare("maxstep"))
+    else if (!key.compare("max-steps"))
         maxstep = stoul(val.at(0));
-    else if (!key.compare("dbfile"))
+    else if (!key.compare("database-filename"))
         dbfile = val.at(0);
-    else if (!key.compare("printsteps"))
+    else if (!key.compare("print-steps"))
         printSteps = stoul(val.at(0));
-    else if (!key.compare("trackphoton"))
+    else if (!key.compare("track-photon"))
         trackPhoton = stoul(val.at(0));
-    else if (!key.compare("exportpaths"))
+    else if (!key.compare("export-paths")) {
         storepaths = stoul(val.at(0));
-    else if (!key.compare("pathbasefilename"))
-        RayPath::ofbasename = val.at(0);
-    else if (!key.compare("Zres"))
+        RayPath::ofbasename = val.at(1);
+    }
+    else if (!key.compare("grid-z-points"))
         Zres = stoul(val.at(0));
-    else if (!key.compare("Rres"))
+    else if (!key.compare("grid-xy-points"))
         Rres = stoul(val.at(0));
-    else if (!key.compare("Tres"))
+    else if (!key.compare("grid-t-points"))
         Tres = stoul(val.at(0));
-    else if (!key.compare("THres"))
+    else if (!key.compare("grid-theta-points"))
         THres = stoul(val.at(0));
+    else if (!key.compare("grid-freq-points"))
+        Fres = stoul(val.at(0));
     else if (!key.compare("moments"))
         momentlvl = stoul(val.at(0));
-    else if (!key.compare("backwall")) {
+    else if (!key.compare("enable-backwall")) {
         tmpbool = stoi(val.at(0));
         if (tmpbool)
             tmpflags |= (int)SimFlags::BackWall;
         else
             tmpflags &= ~((int)SimFlags::BackWall);
         flags = (SimFlags) tmpflags;
-    } else if (!key.compare("frontwall")) {
+    } else if (!key.compare("enable-frontwall")) {
         tmpbool = stoi(val.at(0));
         if (tmpbool)
             tmpflags |= (int)SimFlags::FrontWall;
         else
             tmpflags &= ~((int)SimFlags::FrontWall);
         flags = (SimFlags) tmpflags;
-    } else if (!key.compare("sidewall")) {
+    } else if (!key.compare("enable-sidewall")) {
         tmpbool = stoi(val.at(0));
         if (tmpbool)
             tmpflags |= (int)SimFlags::RadialWall;
         else
             tmpflags &= ~((int)SimFlags::RadialWall);
         flags = (SimFlags) tmpflags;
-    } else if (!key.compare("interference")) {
+    } else if (!key.compare("enable-interference")) {
         tmpbool = stoi(val.at(0));
         if (tmpbool)
             tmpflags |= (int)SimFlags::Interference;
         else
             tmpflags &= ~((int)SimFlags::Interference);
         flags = (SimFlags) tmpflags;
-    } else if (!key.compare("saturation")) {
+    } else if (!key.compare("enable-saturation")) {
         tmpbool = stoi(val.at(0));
         if (tmpbool)
             tmpflags |= (int)SimFlags::Saturation;
         else
             tmpflags &= ~((int)SimFlags::Saturation);
         flags = (SimFlags) tmpflags;
-    } else if (!key.compare("singlephoton")) {
+    } else if (!key.compare("enable-single-photon")) {
         tmpbool = stoi(val.at(0));
         if (tmpbool)
             tmpflags |= (int)SimFlags::SinglePhoton;
         else
             tmpflags &= ~((int)SimFlags::SinglePhoton);
         flags = (SimFlags) tmpflags;
-    } else if (!key.compare("timedependent")) {
+    } else if (!key.compare("enable-time-dependent")) {
         tmpbool = stoi(val.at(0));
         if (tmpbool)
             tmpflags |= (int)SimFlags::TimeResolved;
         else
             tmpflags &= ~((int)SimFlags::TimeResolved);
         flags = (SimFlags) tmpflags;
-    } else if (!key.compare("fluorescence")) {
+    } else if (!key.compare("enable-fluorescence")) {
         tmpbool = stoi(val.at(0));
         if (tmpbool)
             tmpflags |= (int)SimFlags::Fluorescence;
         else
             tmpflags &= ~((int)SimFlags::Fluorescence);
         flags = (SimFlags) tmpflags;
-    } else if (!key.compare("cartesian")) {
+    } else if (!key.compare("enable-cartesian")) {
         tmpbool = stoi(val.at(0));
         if (tmpbool)
             tmpflags |= (int)SimFlags::Cartesian;
         else
             tmpflags &= ~((int)SimFlags::Cartesian);
         flags = (SimFlags) tmpflags;
-    } else if (!key.compare("periodicxy")) {
+    } else if (!key.compare("enable-periodic-xy")) {
         tmpbool = stoi(val.at(0));
         if (tmpbool)
             tmpflags |= (int)SimFlags::PeriodicXY;
         else
             tmpflags &= ~((int)SimFlags::PeriodicXY);
         flags = (SimFlags) tmpflags;
-    } else if (!key.compare("periodicz")) {
+    } else if (!key.compare("enable-periodic-z")) {
         tmpbool = stoi(val.at(0));
         if (tmpbool)
             tmpflags |= (int)SimFlags::PeriodicZ;
@@ -1088,13 +1101,13 @@ void Simulation::load(const string& fname, const vector<string>& args) {
                     run();
                 else if (!key.compare("setup"))
                     setup();
-                else if (!key.compare("genBeam"))
+                else if (!key.compare("generate-beam"))
                     genBeam();
                 else if (!key.compare("print"))
                     print();
                 else if (!key.compare("write"))
                     write(vals.at(0));
-                else if (!key.compare("exec")) {
+                else if (!key.compare("execute")) {
                     exec(args);
                     return; //Exit here
                 } else
@@ -1168,7 +1181,6 @@ void Simulation::write(string s) const {
 }
 
 void Simulation::exec(const vector<string>& args) {
-    cerr << "Got here!" << endl;
     //Loop through args and parse them
     string cmd;
     vector<string> arg;

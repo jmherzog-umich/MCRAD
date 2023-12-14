@@ -5,8 +5,11 @@
 #include "utility.h"
 #include "raypath.h"
 
-#define CONST_PI 3.1415926535
-#define CONST_EPS 1e-10
+#define CONST_PI   3.1415926535897932
+#define CONST_C    299.792458
+#define CONST_HBAR 1.054571817679489e-22
+#define CONST_HK   7.6382325822577381
+#define CONST_EPS  1e-10
 
 #ifndef _PHOTON_H_
 #define _PHOTON_H_
@@ -137,7 +140,7 @@ void Photon::Scatter(double eps1, double eps2, const Medium& p) {
                 / sqrt(1-pow(mu.Z,2)) + mu.X*cost;
     };
     mu = vec(newX, newY, newZ);
-    flags = (PhotonFlags) ((int)PhotonFlags::isBallistic | (int)flags);
+    flags = (PhotonFlags) (~(int)PhotonFlags::isBallistic & (int)flags);
     
     //Store raypath
     if (pth)

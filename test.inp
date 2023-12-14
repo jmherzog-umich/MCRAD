@@ -1,35 +1,35 @@
-Ss 1
-Sa 0.003
-xca 0
-xcs 0
-N0 5000000
-n0 1
-nx 1
-n 1
-nr 1
-Rres 20
-Zres 20
-THres 20
-Tres 500
-dens 0.5
-R 10000
-L 1000
-dT 0.1
-dTf 20
-Rb 1
-Rbmax 1
-phase 0
-backwall 1
-frontwall 1
-sidewall 1
-cartesian 1
-periodicxy 0
-fluorescence 1
-timedependent 1
-singlephoton 1
-beamprofile 0
-beamspread 1
-dbfile test.csv
-exportpaths 100
-pathbasefilename test
-exec
+spectrum-scattering 1 5 800
+spectrum-absorption 0.003 5 800
+spectrum-fluorescence 1 6 3500
+scattering-anisotropy 0 0.98
+lifetime-fluorescence 1000
+density 0.5
+index-medium 1
+index-front 1
+index-side 1
+index-back 1
+grid-xy-points 20
+grid-z-points 20
+grid-theta-points 20
+grid-t-points 500
+grid-freq-points 100
+simulation-packets 5000000
+simulation-frequency-range 400 1000
+simulation-length 100
+simulation-radius 10000
+simulation-timestep 0.1
+simulation-timestep-fluorescence 20
+enable-backwall 1
+enable-frontwall 1
+enable-sidewall 1
+enable-cartesian 1
+enable-periodic-xy 0
+enable-fluorescence 1
+enable-time-dependent 1
+enable-single-photon 1
+beam-photons-per-packet 10000
+beam-radius-cutoff 5000
+beam-profile 1
+database-filename test.csv
+export-paths 100 test
+execute

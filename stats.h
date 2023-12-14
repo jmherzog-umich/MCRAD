@@ -10,15 +10,18 @@
 #ifndef _STATS_H_
 #define _STATS_H_
 
-#define CONST_PI 3.1415926535
-#define CONST_EPS 1e-10
+#define CONST_PI   3.1415926535897932
+#define CONST_C    299.792458
+#define CONST_HBAR 1.054571817679489e-22
+#define CONST_HK   7.6382325822577381
+#define CONST_EPS  1e-10
 
 using namespace std;
 
 struct Stats {
     //Settings
-    int Tres, THETAres, momentlvl;
-    double dT, dTf, dTHETA, T, PHI;
+    int Tres, THETAres, momentlvl, Fres;
+    double dT, dTf, dTHETA, T, PHI, dF, F0;
     double Rdiffuse, Tdiffuse, Tballistic, Rspec, Ldiffuse;
     
     //Output arrays for energy deposition, scatter, etc.
@@ -30,6 +33,9 @@ struct Stats {
     
     //Time-dependence
     vector<double> Tt, Rt, Lt, At;
+    
+    //Wavelength/frequency-dependence
+    vector<double> Tw, Rw, Lw, Aw;
     
     //Diffusion coefficients
     double DX, DY, DZ, ND;
@@ -45,6 +51,7 @@ struct Stats {
     double Ff, Fb, Fl, Ffballistic, Fbballistic, Flballistic;   //Front, Back, Side transmission (and ballistic)
     vector<double> Fftheta, Fbtheta;                            //Front and back angle-dependence
     vector<double> Fft, Fbt, Flt, Fat, Ft;                      //Front, back, side, reabsorption, emission time-dependence
+    vector<double> Ffw, Fbw, Flw, Faw, Fw;                      //Front, back, side, reabsorption, emission time-dependence
     vector<double> FMOMENTS, FSMOMENTS, FTHMOMENT, FTMOMENT, FSTMOMENT;
     
     //Cache
@@ -53,18 +60,20 @@ struct Stats {
     //Functions
     //--Constructors
     Stats();
-    Stats(int N, double dT, int LVL=4);
-    Stats(int nT, int nTH, double dT, double dTf, int LVL=4);
+    Stats(int n, double dT, double Fmin, double Fmax, int LVL=4);
+    Stats(int nT, int nTH, int nF, double dT, double dTf, double Fmin, double Fmax, int LVL=4);
     
     //--Accessors
     int getBinT(double t) const;
     int getBinTf(double t) const;
     int getBinTh(double sint) const;
+    int getBinF(double F) const;
     
     //--Print results functions
     void setup();
     void print() const;
     void printTime() const;
+    void printFreq() const;
     
     void writedb(ofstream& OF) const;
     void writedbheader(ofstream& OF) const;
@@ -72,7 +81,7 @@ struct Stats {
     //--Functions to aggregate data
     void scatter(const Photon& p, double w);
     void absorb(const Photon& p, double w);
-    void emit(const Photon& p, double w);
+    void emit(const Photon& p);
     void diffusion(const vec& x, double w, double t);
     double initialize(const Photon& x, double m);
     void reflect(const Photon& p, int surf, double R, double sint);
@@ -80,20 +89,23 @@ struct Stats {
 };
 
 Stats::Stats() {
-    Stats(20, 1.0, 4);
+    Stats(20, 1.0, 0, 1000, 4);
 }
 
-Stats::Stats(int n, double dT, int LVL) {
-    Stats(n, n, dT, LVL);
+Stats::Stats(int n, double dT, double Fmin, double Fmax, int LVL) {
+    Stats(n, n, n, dT, dT, Fmin, Fmax, LVL);
 }
 
-Stats::Stats(int nT, int nTH, double dT, double dTf, int LVL) {
+Stats::Stats(int nT, int nTH, int nF, double dT, double dTf, double Fmin, double Fmax, int LVL) {
     //Set default resolution
     Tres = nT;             //Number of time samples
+    Fres = nF;             //Number of Frequency samples
     THETAres = nTH;        //Number of cos(theta) values for reflection
     momentlvl = LVL;       //Order of moments to calculate (only up to 4th order is implemented)
     this->dT = dT;
     this->dTf = dTf;
+    this->dF = (Fmax-Fmin) / nF;
+    F0 = Fmin;
     PHI = 0;               //Total number of photons
     
     //Reflection and transmission
@@ -151,6 +163,12 @@ void Stats::setup() {
     Lt = vector<double>(Tres, 0.0);
     At = vector<double>(Tres, 0.0);
     
+    //Frequency arrays
+    Tw = vector<double>(Fres, 0.0);
+    Rw = vector<double>(Fres, 0.0);
+    Lw = vector<double>(Fres, 0.0);
+    Aw = vector<double>(Fres, 0.0);
+    
     //Reflection and transmission
     Rtheta = vector<double>(THETAres, 0.0);
     Rstheta = vector<double>(THETAres, 0.0);
@@ -159,11 +177,18 @@ void Stats::setup() {
     //Fluorescence values
     Fftheta = vector<double>(THETAres, 0.0);
     Fbtheta = vector<double>(THETAres, 0.0);
+    
     Fft = vector<double>(Tres, 0.0);
     Fbt = vector<double>(Tres, 0.0);
     Flt = vector<double>(Tres, 0.0);
     Fat = vector<double>(Tres, 0.0);
     Ft = vector<double>(Tres, 0.0);
+    
+    Ffw = vector<double>(Fres, 0.0);
+    Fbw = vector<double>(Fres, 0.0);
+    Flw = vector<double>(Fres, 0.0);
+    Faw = vector<double>(Fres, 0.0);
+    Fw = vector<double>(Fres, 0.0);
     
     //Initialize moments and other outputs
     MOMENTS = vector<double>(14, 0.0);
@@ -203,11 +228,21 @@ int Stats::getBinTh(double sint) const {
     return binTheta;
 }
 
-void Stats::emit(const Photon& p, double W) {
-    FGEN += W;
+int Stats::getBinF(double w) const {
+    int binW = (int) (w-F0)/dF;
+    if ((binW >= Fres) or (binW < 0))
+        return -1;
+    return binW;
+}
+
+void Stats::emit(const Photon& p) {
+    FGEN += p.W;
     int binT = getBinTf(p.t);
     if (binT >= 0)
-        Ft.at(binT) += W;
+        Ft.at(binT) += p.W;
+    int binW = getBinF(p.v);
+    if (binW >= 0)
+        Fw.at(binW) += p.W;
 }
 
 void Stats::absorb(const Photon& p, double W) {
@@ -218,11 +253,14 @@ void Stats::absorb(const Photon& p, double W) {
     
     //Calculate moments
     if (p.isFluorescence()) {
-        //Temporal absorption data
+        //Temporal/frequency absorption data
         FDEP += W;
         binT = getBinTf(t);
         if (binT >= 0)
             Fat.at(binT) += W;
+        binT = getBinF(p.v);
+        if (binT >= 0)
+            Faw.at(binT) += W;
         
         //Absorption moments for fluorescence
         if (momentlvl > 0) {
@@ -291,6 +329,9 @@ void Stats::absorb(const Photon& p, double W) {
     //Time vector
     if (binT >= 0)
         At.at(binT) += W;
+    binT = getBinF(p.v);
+    if (binT >= 0)
+        Aw.at(binT) += W;
 }
 
 void Stats::scatter(const Photon& p, double W) {
@@ -393,7 +434,7 @@ double Stats::getR(const vec& mu, const vec& n, double m, double& sint) const {
 void Stats::reflect(const Photon& p, int surf, double R, double sint) {
     //Calculate theta from Snell's law
     double W;
-    int binTHETA, binT;
+    int binTHETA, binT, binW;
     
     //Calculate the intensity to add, and the T scale if we're static
     W = p.W;
@@ -407,6 +448,7 @@ void Stats::reflect(const Photon& p, int surf, double R, double sint) {
     //Do fluorescence first then quit
     if (p.isFluorescence()) {
         binT = getBinTf(p.t);
+        binW = getBinF(p.v);
         switch (surf) {
             case 1:
                 Fb += (1-R) * W;
@@ -414,6 +456,8 @@ void Stats::reflect(const Photon& p, int surf, double R, double sint) {
                     Fbtheta.at(binTHETA) += W * (1-R);
                 if (binT >= 0)
                     Fbt.at(binT) += (1-R) * W;
+                if (binW >= 0)
+                    Fbw.at(binW) += (1-R) * W;
                 if (p.isBallistic())
                     Fbballistic += W * (1-R);
                 break;
@@ -423,6 +467,8 @@ void Stats::reflect(const Photon& p, int surf, double R, double sint) {
                     Fftheta.at(binTHETA) += W * (1-R);
                 if (binT >= 0)
                     Fft.at(binT) += (1-R) * W;
+                if (binW >= 0)
+                    Ffw.at(binW) += (1-R) * W;
                 if (p.isBallistic())
                     Ffballistic += W * (1-R);
                 break;
@@ -430,6 +476,8 @@ void Stats::reflect(const Photon& p, int surf, double R, double sint) {
                 Fl += (1-R) * W;
                 if (binT >= 0)
                     Flt.at(binT) += (1-R) * W;
+                if (binW >= 0)
+                    Flw.at(binW) += (1-R) * W;
                 if (p.isBallistic())
                     Flballistic += W * (1-R);
                 break;
@@ -450,6 +498,7 @@ void Stats::reflect(const Photon& p, int surf, double R, double sint) {
     
     //Get moments
     binT = getBinT(p.t);
+    binW = getBinF(p.v);
     if (p.n > 0) {
         if (momentlvl > 0)
             THMOMENT.at(0+((surf == 1) ? 4 : 0)) += W * (1-R) * sint;
@@ -481,6 +530,8 @@ void Stats::reflect(const Photon& p, int surf, double R, double sint) {
             Ttheta.at(binTHETA) += W * (1-R);
         if (binT >= 0)
             Tt.at(binT) += (1-R) * W;
+        if (binW >= 0)
+            Tw.at(binW) += (1-R) * W;
         if (p.isBallistic())
             Tballistic += W * (1-R);
     } else if (surf == 2) {
@@ -489,10 +540,14 @@ void Stats::reflect(const Photon& p, int surf, double R, double sint) {
             Rtheta.at(binTHETA) += W * (1-R);
         if (binT >= 0)
             Rt.at(binT) += (1-R) * W;
+        if (binW >= 0)
+            Rw.at(binW) += (1-R) * W;
     } else if (surf == 3) {
         Ldiffuse += (1-R) * W;
         if (binT >= 0)
             Lt.at(binT) += (1-R) * W;
+        if (binW >= 0)
+            Lw.at(binW) += (1-R) * W;
     }
     
     //Increment beam radii
@@ -584,6 +639,49 @@ void Stats::printTime() const {
     cout << endl << "Freabs:   ";
     for (int i = 0; i < Tres; i ++)
         cout << scientific << setw(18) << Fat.at(i);
+}
+
+void Stats::printFreq() const {
+    //Print header
+    cout << endl << "Radiation frequency profiles [photons/freq. bin]:" << endl;
+    cout << " W [THz]: ";
+    for (int i = 0; i < Fres; i ++)
+        cout << scientific << setw(18) << dF * i + F0;
+        
+    //Now print the reflection/transmission/absorption data
+    cout << endl << "Rdiffuse: ";
+    for (int i = 0; i < Fres; i ++)
+        cout << scientific << setw(18) << Rw.at(i);
+    cout << endl << "Tdiffuse: ";
+    for (int i = 0; i < Fres; i ++)
+        cout << scientific << setw(18) << Tw.at(i);
+    cout << endl << "Ldiffuse: ";
+    for (int i = 0; i < Fres; i ++)
+        cout << scientific << setw(18) << Lw.at(i);
+    cout << endl << "Adep:     ";
+    for (int i = 0; i < Fres; i ++)
+        cout << scientific << setw(18) << Aw.at(i);
+    
+    //If no fluorescence, exit here
+    if (FGEN < CONST_EPS)
+        return;
+        
+    //Otherwise print fluorescence
+    cout << endl << "Femitted: ";
+    for (int i = 0; i < Fres; i ++)
+        cout << scientific << setw(18) << Fw.at(i);
+    cout << endl << "Ffront:   ";
+    for (int i = 0; i < Fres; i ++)
+        cout << scientific << setw(18) << Ffw.at(i);
+    cout << endl << "Fback:    ";
+    for (int i = 0; i < Fres; i ++)
+        cout << scientific << setw(18) << Fbw.at(i);
+    cout << endl << "Fside:    ";
+    for (int i = 0; i < Fres; i ++)
+        cout << scientific << setw(18) << Flw.at(i);
+    cout << endl << "Freabs:   ";
+    for (int i = 0; i < Fres; i ++)
+        cout << scientific << setw(18) << Faw.at(i);
 }
 
 void Stats::print() const {
@@ -769,7 +867,6 @@ void Stats::print() const {
             cout << "     " << MOMENTS[13]/ADEP;
         if (FGEN > CONST_EPS)
             cout << "     " << FSMOMENTS[13]/FSCAT << "     " << FMOMENTS[13]/FDEP;
-            
     }
     
     //Transmission angle moments
@@ -802,9 +899,13 @@ void Stats::print() const {
     
     //Print time dependence
     printTime();
+    cout << endl;
+    
+    //Print frequency dependence
+    printFreq();
+    cout << endl << endl;
     
     //Reflection coefficients (total)
-    cout << endl << endl;
     cout << "Reflection/Transmission/Absorption";
     if (FGEN > CONST_EPS)
         cout << "/Emission";
