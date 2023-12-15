@@ -1,8 +1,9 @@
 spectrum-scattering 1 5 800
-spectrum-absorption 0.003 5 800
-spectrum-fluorescence 1 6 3500
+spectrum-absorption 0.01 1 825 50
+spectrum-fluorescence 0.5 1 775 50
+beam-spectrum 1 850 5
 scattering-anisotropy 0 0.98
-lifetime-fluorescence 1000
+lifetime-fluorescence 10
 density 0.5
 index-medium 1
 index-front 1
@@ -14,11 +15,11 @@ grid-theta-points 20
 grid-t-points 500
 grid-freq-points 100
 simulation-packets 5000000
-simulation-frequency-range 400 1000
+simulation-frequency-range 625 925
 simulation-length 100
-simulation-radius 10000
-simulation-timestep 0.1
-simulation-timestep-fluorescence 20
+simulation-radius 1000
+simulation-timestep 0.01
+simulation-timestep-fluorescence 0.1
 enable-backwall 1
 enable-frontwall 1
 enable-sidewall 1
@@ -27,6 +28,7 @@ enable-periodic-xy 0
 enable-fluorescence 1
 enable-time-dependent 1
 enable-single-photon 1
+enable-fluorescence-trapping 0
 beam-photons-per-packet 10000
 beam-radius-cutoff 5000
 beam-profile 1

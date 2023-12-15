@@ -5,14 +5,17 @@
 #include "utility.h"
 #include "raypath.h"
 
-#define CONST_PI   3.1415926535897932
-#define CONST_C    299.792458
-#define CONST_HBAR 1.054571817679489e-22
-#define CONST_HK   7.6382325822577381
-#define CONST_EPS  1e-10
-
 #ifndef _PHOTON_H_
 #define _PHOTON_H_
+
+#define CONST_PI            3.1415926535897932
+#define CONST_C             299.792458
+#define CONST_HBAR          1.054571817679489e-22
+#define CONST_HK            47.992430733662212
+#define CONST_APERY         1.2020569031595942
+#define CONST_WIEN          1.5936242600400401
+#define CONST_EPS           1e-10
+#define CONST_PLANCKMAX     0.6476102378919149
 
 using namespace std;
 

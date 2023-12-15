@@ -10,11 +10,14 @@
 #ifndef _STATS_H_
 #define _STATS_H_
 
-#define CONST_PI   3.1415926535897932
-#define CONST_C    299.792458
-#define CONST_HBAR 1.054571817679489e-22
-#define CONST_HK   7.6382325822577381
-#define CONST_EPS  1e-10
+#define CONST_PI            3.1415926535897932
+#define CONST_C             299.792458
+#define CONST_HBAR          1.054571817679489e-22
+#define CONST_HK            47.992430733662212
+#define CONST_APERY         1.2020569031595942
+#define CONST_WIEN          1.5936242600400401
+#define CONST_EPS           1e-10
+#define CONST_PLANCKMAX     0.6476102378919149
 
 using namespace std;
 
@@ -26,6 +29,9 @@ struct Stats {
     
     //Output arrays for energy deposition, scatter, etc.
     vector<double> Rtheta, Rstheta, Ttheta;
+    
+    //Incident spectra and time
+    vector<double> It, Iw;
     
     //Initialize moments and other outputs
     vector<double> MOMENTS, SMOMENTS, THMOMENT, TMOMENT, STMOMENT;
@@ -162,12 +168,14 @@ void Stats::setup() {
     Rt = vector<double>(Tres, 0.0);
     Lt = vector<double>(Tres, 0.0);
     At = vector<double>(Tres, 0.0);
+    It = vector<double>(Tres, 0.0);
     
     //Frequency arrays
     Tw = vector<double>(Fres, 0.0);
     Rw = vector<double>(Fres, 0.0);
     Lw = vector<double>(Fres, 0.0);
     Aw = vector<double>(Fres, 0.0);
+    Iw = vector<double>(Fres, 0.0);
     
     //Reflection and transmission
     Rtheta = vector<double>(THETAres, 0.0);
@@ -206,21 +214,21 @@ void Stats::setup() {
 }
 
 int Stats::getBinT(double t) const {
-    int binT = (int)(t/dT);
+    int binT = (int) floor(t/dT);
     if ((binT >= Tres) or (binT < 0))
         return -1;
     return binT;
 }
 
 int Stats::getBinTf(double t) const {
-    int binT = (int)((t-dTf)/dTf);
+    int binT = (int) floor((t-dTf)/dTf);
     if ((binT >= Tres) or (binT < 0))
         return -1;
     return binT;
 }
 
 int Stats::getBinTh(double sint) const {
-    int binTheta = (int) (sint/dTHETA);
+    int binTheta = (int) floor(sint/dTHETA);
     if (binTheta >= THETAres)
         binTheta = THETAres-1;
     else if (binTheta < 0)
@@ -229,7 +237,7 @@ int Stats::getBinTh(double sint) const {
 }
 
 int Stats::getBinF(double w) const {
-    int binW = (int) (w-F0)/dF;
+    int binW = (int) floor((w-F0)/dF);
     if ((binW >= Fres) or (binW < 0))
         return -1;
     return binW;
@@ -563,7 +571,7 @@ void Stats::reflect(const Photon& p, int surf, double R, double sint) {
 double Stats::initialize(const Photon& p, double m) {
     //Calculate reflection coefficient and increment specular reflection
     double R, cost, sint;
-    int binTHETA;
+    int binTHETA, binF, binT;
     if (1-abs(p.mu.Z) < CONST_EPS) {
         R = (1.0-m)*(1.0-m)/(1.0+m)/(1.0+m);
         sint = 0;
@@ -584,11 +592,19 @@ double Stats::initialize(const Photon& p, double m) {
     
     //Calculate binTHETA, store theta resolved Rspec and Rspec
     binTHETA = getBinTh(sint);
-    
-    //Increment Rspec
     if (binTHETA+1)
         Rstheta.at(binTHETA) += p.W*R;
     Rspec += p.W*R;
+    
+    //Frequency spectrum
+    binF = getBinF(p.v);
+    if (binF + 1)
+        Iw.at(binF) += p.W;
+    
+    //Time-domain
+    binT = getBinT(p.t);
+    if (binT + 1)
+        It.at(binT) += p.W;
         
     //Return reflection coefficient
     return R;
@@ -602,6 +618,9 @@ void Stats::printTime() const {
         cout << scientific << setw(18) << dT * i;
         
     //Now print the reflection/transmission/absorption data
+    cout << endl << "Incident: ";
+    for (int i = 0; i < Tres; i ++)
+        cout << scientific << setw(18) << It.at(i);
     cout << endl << "Rdiffuse: ";
     for (int i = 0; i < Tres; i ++)
         cout << scientific << setw(18) << Rt.at(i);
@@ -649,6 +668,9 @@ void Stats::printFreq() const {
         cout << scientific << setw(18) << dF * i + F0;
         
     //Now print the reflection/transmission/absorption data
+    cout << endl << "Incident: ";
+    for (int i = 0; i < Fres; i ++)
+        cout << scientific << setw(18) << Iw.at(i);
     cout << endl << "Rdiffuse: ";
     for (int i = 0; i < Fres; i ++)
         cout << scientific << setw(18) << Rw.at(i);
@@ -916,7 +938,7 @@ void Stats::print() const {
     cout << endl << "  Rspecular  = " << fixed << setw(10) << Rspec/PHI;
     if (FGEN > CONST_EPS)
         cout << "     " << "  Ffront     = " << fixed << setw(10) << Ff/PHI;
-    cout << endl << "  Tdiffuse   = " << fixed << setw(10) << Tdiffuse/PHI;
+    cout << endl << "  Tdiffuse   = " << fixed << setw(10) << (Tdiffuse-Tballistic)/PHI;
     if (FGEN > CONST_EPS)
         cout << "     " << "  Fback      = " << fixed << setw(10) << Fb/PHI;
     cout << endl << "  Tballistic = " << fixed << setw(10) << Tballistic/PHI;
@@ -927,7 +949,7 @@ void Stats::print() const {
         cout << "     " << "  Fabs       = " << fixed << setw(10) << FDEP/PHI;
     cout << endl << "  A          = " << fixed << setw(10) << ADEP/PHI << endl << endl;
     cout << endl << "Checking for math errors:" << endl;
-    cout << "     1 - (Rd + Rs + Td + A + Ld)   ?=  0  =  " << 1-(Rdiffuse + Rspec + Tdiffuse + ADEP + Ldiffuse) / PHI << endl;
+    cout << "     1 - (Rd + Rs + Td + Tb + A + Ld)   ?=  0  =  " << 1-(Rdiffuse + Rspec + Tdiffuse + ADEP + Ldiffuse) / PHI << endl;
     if (FGEN > CONST_EPS)
         cout << "     Fg - (Ff + Fb + Fl + Fa)      ?=  0  =  " << (FGEN - Ff - Fb - Fl - FDEP) / PHI << endl;
     if (FGEN > CONST_EPS)

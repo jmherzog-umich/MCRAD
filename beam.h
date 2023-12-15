@@ -5,15 +5,19 @@
 
 #include "utility.h"
 #include "photon.h"
+#include "spectrum.h"
 
 #ifndef _BEAM_H_
 #define _BEAM_H_
 
-#define CONST_PI   3.1415926535897932
-#define CONST_C    299.792458
-#define CONST_HBAR 1.054571817679489e-22
-#define CONST_HK   7.6382325822577381
-#define CONST_EPS  1e-10
+#define CONST_PI            3.1415926535897932
+#define CONST_C             299.792458
+#define CONST_HBAR          1.054571817679489e-22
+#define CONST_HK            47.992430733662212
+#define CONST_APERY         1.2020569031595942
+#define CONST_WIEN          1.5936242600400401
+#define CONST_EPS           1e-10
+#define CONST_PLANCKMAX     0.6476102378919149
 
 using namespace std;
 
@@ -23,7 +27,6 @@ struct Beam {
     enum struct BeamSpread { Collimated = 0, Gaussian = 1, Lambertian = 2, Isotropic = 3 };
     enum struct BeamType { Uniform = 0, Gaussian = 1, UniformEllipse = 2, GaussianEllipse = 3, UniformAnnulus = 4, GaussianAnnulus = 5 };
     enum struct BeamDuration { Uniform = 0, Gaussian = 1, Cauchy = 2 };
-    enum struct BeamSpectrum { Uniform = 0, Gaussian = 1, Cauchy = 2 };
 
     //Data members
     double E=1e5;                   //Photons per packet
@@ -33,15 +36,13 @@ struct Beam {
     double Sb=2.5e2;                //Beam profile parameter: linewidth (UniformEllipse, Guass1D), Inner radius (UniformAnnulus, GaussianAnnulus)
     double Zb = 0;                  //Focus location of beam (0 for infinity/unfocused)
     double Tb = 0;                  //Laser pulse duration
-    double wb=800;                  //Angular frequency in THz (5.5e5 ~ 545 nm light)
-    double dwb=0;                   //Angular frequency spread parameter (THz);
     double N0 = 0;
     double Rmax = 0;                //Maximum allowed radius 
     
     BeamType beamprofile = BeamType::Uniform;
     BeamSpread spreadfxn = BeamSpread::Collimated;
     BeamDuration beamdur = BeamDuration::Uniform;
-    BeamSpectrum beamspec = BeamSpectrum::Uniform;
+    Spectrum beamspec;
 
     Beam();
     void print() const;
@@ -58,8 +59,8 @@ Beam::Beam() {
     spreadfxn = BeamSpread::Collimated;
     beamprofile = BeamType::Uniform;
     beamdur = BeamDuration::Uniform;
-    beamspec = BeamSpectrum::Uniform;
-    sin0=0.0; Rb=5e2; wb=800; dwb=0;
+    beamspec = Spectrum(Spectrum::SpectrumModel::Impulse, {800});
+    sin0=0.0; Rb=5e2;
     Zb = 0; Tb = 0; Pb = 0; N0 = 0; E = 1e5;
 }
 
@@ -94,21 +95,17 @@ void Beam::print() const {
     }
     
     cout << "Beam frequency spectrum: ";
-    switch (beamspec) {
-        case BeamSpectrum::Uniform : cout << "Uniform (" << wb << " +/- " << dwb << " THz)" << endl; break;
-        case BeamSpectrum::Gaussian : cout << "Gaussian (sigma = " << wb << " +/- " << dwb << " THz)" << endl; break;
-        case BeamSpectrum::Cauchy : cout << "Gaussian (gamma = " << wb << " +/- " << dwb << " THz)" << endl; break;
-        default: cout << "Other" << endl; break;
-    }
+    cout << beamspec.name() << endl << "   ";
+    cout << beamspec.paramstring() << endl;
     
     cout << "Focus at depth: " << ((Zb > 0) ? Zb : INFINITY) << ((Zb > 0) ? " um" : "") << endl;
     cout << "Incident sin(theta): " << sin0 << endl;
     cout << "Photons per packet: " << E << endl;
     cout << "Total photons: " << E * N0 << endl;
     if (Ab > 0)
-        cout << "Average fluence: " << E * N0 / Ab << " photons/um2     " << E * N0 * CONST_HBAR * wb / Ab * 1e8 << " J/cm2" << endl;
+        cout << "Average fluence: " << E * N0 / Ab << " photons/um2     ~" << E * N0 * CONST_HBAR * beamspec.peak() / Ab * 1e8 << " J/cm2" << endl;
     if ((Ab > 0) and (Tb > 0))
-        cout << "Average fluence rate: " << E * N0 / Ab / Tb << " photons/um2/ps" << E * N0 * CONST_HBAR * wb / Ab / Tb * 1e20 << " W/cm2" << endl;
+        cout << "Average fluence rate: " << E * N0 / Ab / Tb << " photons/um2/ps     ~" << E * N0 * CONST_HBAR * beamspec.peak() / Ab / Tb * 1e20 << " W/cm2" << endl;
     cout << endl;
 
 }
@@ -205,20 +202,7 @@ vector<Photon> Beam::sampleBeam(unsigned long int N0) {
         ///
         //  Calculate beam frequency
         ///
-        PHOTONS.at(i).v = wb;
-        if (dwb > 0) {
-            switch (beamspec) {
-                case BeamSpectrum::Uniform :
-                    PHOTONS.at(i).v += dwb * (roll()-0.5);
-                    break;
-                case BeamSpectrum::Gaussian :
-                    PHOTONS.at(i).v += dwb * erfinvf(rollf());
-                    break;
-                case BeamSpectrum::Cauchy :
-                    PHOTONS.at(i).v += - dwb / tan(CONST_PI * roll());
-                    break;
-            }
-        }
+        PHOTONS.at(i).v = beamspec.sample();
         
         ///
         //  Calculate photon packet time
@@ -311,9 +295,10 @@ bool Beam::set(const string& key, const vector<string>& val) {
         Tb = stod(val.at(0));
         beamdur = (val.size()>1) ? (Beam::BeamDuration)stoul(val.at(1)) : Beam::BeamDuration::Uniform;
     } else if (!key.compare("beam-spectrum")) {
-        wb = stod(val.at(0));
-        beamspec = (val.size()>1) ? (Beam::BeamSpectrum)stoul(val.at(1)) : Beam::BeamSpectrum::Uniform;
-        if (val.size() > 2) dwb = stod(val.at(2));
+        vector<double> vals;
+        for (unsigned long int i = 1; i < val.size(); i ++)
+            vals.push_back(stod(val.at(i)));
+        beamspec = Spectrum((Spectrum::SpectrumModel)stoul(val.at(0)), vals);
     } else
         return false;
     return true;

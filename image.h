@@ -33,8 +33,8 @@ struct Image {
 };
 
 void Image::image(double x, double y, double f, double phase) {
-    int binx = (int)(x/Lpx) + nx;
-    int biny = (int)(y/Lpx) + ny;
+    int binx = (int) floor((x/Lpx) + nx);
+    int biny = (int) floor((y/Lpx) + ny);
     if ((binx < 0) or (binx > 2*nx) or (biny < 0) or (biny > 2*nx))
         return;
     if (interfere)

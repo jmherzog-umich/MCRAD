@@ -13,6 +13,7 @@
 
 #include "stats.h"
 #include "vec.h"
+#include "spectrum.h"
 #include "photon.h"
 #include "utility.h"
 #include "medium.h"
@@ -25,11 +26,14 @@
 #ifndef _SIMINFO_H_
 #define _SIMINFO_H_
 
-#define CONST_PI   3.1415926535897932
-#define CONST_C    299.792458
-#define CONST_HBAR 1.054571817679489e-22
-#define CONST_HK   7.6382325822577381
-#define CONST_EPS  1e-10
+#define CONST_PI            3.1415926535897932
+#define CONST_C             299.792458
+#define CONST_HBAR          1.054571817679489e-22
+#define CONST_HK            47.992430733662212
+#define CONST_APERY         1.2020569031595942
+#define CONST_WIEN          1.5936242600400401
+#define CONST_EPS           1e-10
+#define CONST_PLANCKMAX     0.6476102378919149
 
 using namespace std;
 
@@ -56,17 +60,18 @@ class Simulation {
         void writedbheader(ofstream& OF) const;
         
         enum struct SimFlags {
-            BackWall      = 0b000000000001,     //Whether there is a backwall in the simulation or semi-infinite
-            FrontWall     = 0b000000000010,     //Whether there is a front wall or semi-infinite
-            RadialWall    = 0b000000000100,     //Whether there is a cylindrical wall or infinite
-            Interference  = 0b000000001000,     //Whether we should include interference in the image calculations
-            Saturation    = 0b000000010000,     //Whether we should allow saturation of absorption in the simulation
-            SinglePhoton  = 0b000000100000,     //Whether to operate in single photon mode
-            Fluorescence  = 0b000001000000,     //Whether to generate fluorescence photons during the run
-            Cartesian     = 0b000010000000,     //Whether the radial wall is square or not
-            TimeResolved  = 0b000100000000,     //Whether the radial wall is square or not
-            PeriodicXY    = 0b001000000000,     //Whether the radial boundary condition is periodic
-            PeriodicZ     = 0b010000000000,     //Whether the Z-axis boundaries enforce periodic behavior
+            BackWall                = 0b000000000001,     //Whether there is a backwall in the simulation or semi-infinite
+            FrontWall               = 0b000000000010,     //Whether there is a front wall or semi-infinite
+            RadialWall              = 0b000000000100,     //Whether there is a cylindrical wall or infinite
+            Interference            = 0b000000001000,     //Whether we should include interference in the image calculations
+            Saturation              = 0b000000010000,     //Whether we should allow saturation of absorption in the simulation
+            SinglePhoton            = 0b000000100000,     //Whether to operate in single photon mode
+            Fluorescence            = 0b000001000000,     //Whether to generate fluorescence photons during the run
+            Cartesian               = 0b000010000000,     //Whether the radial wall is square or not
+            TimeResolved            = 0b000100000000,     //Whether the radial wall is square or not
+            PeriodicXY              = 0b001000000000,     //Whether the radial boundary condition is periodic
+            PeriodicZ               = 0b010000000000,     //Whether the Z-axis boundaries enforce periodic behavior
+            FluorescenceTrapping    = 0b100000000000,     //Whether to let fluorescence emission be re-absorbed (and re-emitted)
         };
     
     private:
@@ -288,6 +293,8 @@ void Simulation::printsettings() const {
     cout << "Saturation: " << (((int)flags & (int)SimFlags::Saturation) ? "True" : "False" ) << endl;
     cout << "Single-photon mode: " << (((int)flags & (int)SimFlags::SinglePhoton) ? "True" : "False" ) << endl;
     cout << "Fluorescence generation: " << (((int)flags & (int)SimFlags::Fluorescence) ? "True" : "False" ) << endl;
+    if ((int)flags & (int)SimFlags::Fluorescence)
+        cout << "Fluorescence-trapping: " << (((int)flags & (int)SimFlags::FluorescenceTrapping) ? "True" : "False") << endl;
     cout << "Side wall geometry: " << (((int)flags & (int)SimFlags::Cartesian) ? "Cartesian" : "Cylindrical" ) << endl;
     cout << "Periodic XY: " << (((int)flags & (int)SimFlags::PeriodicXY) ? "True" : "False" ) << endl;
     if (((int)flags & (int)SimFlags::PeriodicXY) && !((int)flags & (int)SimFlags::Cartesian))
@@ -307,22 +314,31 @@ void Simulation::printsettings() const {
         if ((int)flags & (int)SimFlags::Fluorescence)
             cout << "Storing " << storepaths << " fluorescence ray paths to file: " << RayPath::ofbasename << ".xyz" << endl;
     }
-    cout << "Theoretical max (static) step count for absorption: " << ceil(log(Wmin)/log(medium.albedo(beam.wb)) + 1.0/Wm) << endl;
+    cout << "Theoretical max (static) step count for absorption: " << ceil(log(Wmin)/log(medium.albedo(beam.beamspec.peak())) + 1.0/Wm) << endl;
     if ((int)flags & (int)SimFlags::TimeResolved)
         cout << "Theoretical max (dynamic) step count for absorption: " << ceil((ceil(log(Wmin)/log(medium.albedo())) + 1.0/Wm) / medium.we() / stats.dT) << endl;
     cout << endl;
     
     //Print medium settings
+    cout << "==================================================================" << endl;
+    cout << "Medium properties" << endl;
+    cout << "==================================================================" << endl;
     medium.print();
-    cout << "Peak incident wavelength: " << beam.wb << " THz" << endl;
-    medium.print_at_f(beam.wb);
-    cout << "Peak fluorescence wavelength: " << medium.peak_v() << " THz" << endl;
+    cout << "Peak incident frequency: " << beam.beamspec.peak() << " THz" << endl;
+    medium.print_at_f(beam.beamspec.peak());
+    cout << "Peak fluorescence frequency: " << medium.peak_v() << " THz" << endl;
     medium.print_at_f(medium.peak_v());
     
     //Print beam info
+    cout << "==================================================================" << endl;
+    cout << "Source properties" << endl;
+    cout << "==================================================================" << endl;
     beam.print();
         
     //Print camera info
+    cout << "==================================================================" << endl;
+    cout << "Camera properties" << endl;
+    cout << "==================================================================" << endl;
     cam.printSetup();
         
     //Define output arrays
@@ -354,6 +370,7 @@ void Simulation::setup() {
     stats.setup();
     medium.Fmin = Fmin;
     medium.Fmax = Fmax;
+    Spectrum::setFreqLimits(Fmin, Fmax);
     
     //Create images and cameras
     imgIC = Image(10,10,2*beam.Rb/5, false);
@@ -535,10 +552,11 @@ void Simulation::run() {
                             stats.absorb(PHOTONS.at(i), PHOTONS.at(i).W);
                             
                             //Generate fluorescence photons
-                            if (((int)flags & (int)SimFlags::Fluorescence) && (!PHOTONS.at(i).isFluorescence())) {
-                                grid.at(4, ii,jj,kk) += PHOTONS.at(i).W;
-                                emitPhoton(PHOTONS.at(i).x, PHOTONS.at(i).W, tsim + medium.emit_tau(logroll()));
-                            }
+                            if ((int)flags & (int)SimFlags::Fluorescence)
+                                if (((int)flags & (int)SimFlags::FluorescenceTrapping) || (!PHOTONS.at(i).isFluorescence())){
+                                    grid.at(4, ii,jj,kk) += PHOTONS.at(i).W;
+                                    emitPhoton(PHOTONS.at(i).x, PHOTONS.at(i).W, tsim + medium.emit_tau(logroll()));
+                                }
                             
                             //And kill the photon
                             PHOTONS.at(i).W = -1;
@@ -554,8 +572,9 @@ void Simulation::run() {
                     } else {
                         //Update grids
                         grid.at((PHOTONS.at(i).isFluorescence()?2:0), ii,jj,kk) += PHOTONS.at(i).W * ka/k;
-                        if (((int)flags & (int)SimFlags::Fluorescence) and !PHOTONS.at(i).isFluorescence())
-                            grid.at(4, ii,jj,kk) += PHOTONS.at(i).W * ka/k;
+                        if ((int)flags & (int)SimFlags::Fluorescence)
+                            if (((int)flags & (int)SimFlags::FluorescenceTrapping) || (!PHOTONS.at(i).isFluorescence()))
+                                grid.at(4, ii,jj,kk) += PHOTONS.at(i).W * ka/k;
                         grid.at((PHOTONS.at(i).isFluorescence()?3:1), ii,jj,kk) += PHOTONS.at(i).W;
                     
                         //Update stats
@@ -575,7 +594,7 @@ void Simulation::run() {
                     if (PHOTONS.at(i).isFluorescence())
                         Fabs = grid.norm(2, PHOTONS.at(i).x) / medium.dens();
                     else if ((int)flags & (int)SimFlags::Fluorescence)
-                         Fabs = grid.norm(4, PHOTONS.at(i).x) / medium.dens();
+                        Fabs = grid.norm(4, PHOTONS.at(i).x) / medium.dens();
                     else
                         Fabs = grid.norm(0, PHOTONS.at(i).x) / medium.dens();
                     if (Fabs > 0)
@@ -915,7 +934,7 @@ void Simulation::run() {
             cout << tsim << "  ps" << endl;
         else
             cout << STEP << endl;
-        grid.print();
+        grid.print(true);
     }
     
     //Report status
@@ -1042,6 +1061,13 @@ bool Simulation::set(const string &key, const vector<string>& val) {
             tmpflags |= (int)SimFlags::Fluorescence;
         else
             tmpflags &= ~((int)SimFlags::Fluorescence);
+        flags = (SimFlags) tmpflags;
+    } else if (!key.compare("enable-fluorescence-trapping")) {
+        tmpbool = stoi(val.at(0));
+        if (tmpbool)
+            tmpflags |= (int)SimFlags::FluorescenceTrapping;
+        else
+            tmpflags &= ~((int)SimFlags::FluorescenceTrapping);
         flags = (SimFlags) tmpflags;
     } else if (!key.compare("enable-cartesian")) {
         tmpbool = stoi(val.at(0));

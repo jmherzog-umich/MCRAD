@@ -109,6 +109,7 @@ The parameter/command definitions are as follows:
 | enable-periodic-xy | value | Enable periodic boundary conditions in R/XY direction (boolean 1 or 0) |
 | enable-periodic-z | value | NOT YET IMPLEMENTED: Enables periodic boundary conditions in depth direction (boolean 1 or 0) |
 | enable-fluorescence | value | Enable fluorescence calculation (boolean 1 or 0) |
+| enable-fluorescence-trapping | value | Enable fluorescence calculation (boolean 1 or 0) |
 | enable-time-dependent | value | Enable time-resolved simulation (boolean 1 or 0) |
 | enable-single-photon | value | Enable single-photon mode (boolean 1 or 0) |
 | enable-interference | value | NOT YET IMPLEMENTED: account for interference effects in images (boolean 1 or 0) |
@@ -116,7 +117,7 @@ The parameter/command definitions are as follows:
 | beam-profile | radius [model] [parameter] | Source beam radius (micron), profile, and additional parameters |
 | beam-divergence | width [model] [parameter] | Beam spread width (rad), model, and additional parameters |
 | beam-pulse-duration | duration [model] | Beam temporal width (ps) and profile |
-| beam-spectrum | frequency [model] [parameter] | Beam peak frequency, spectrum model, and model parameters |
+| beam-spectrum | [model] [parameter] | Beam peak frequency, spectrum model, and model parameters |
 | beam-radius-cutoff | value | Maximum radius at which photons will be generated (micron) |
 | beam-photons-per-packet | value | Initial number of photons per packet/scaling factor (photons) |
 | beam-initial-angle | value | Sin of initial incidence angle of beam |

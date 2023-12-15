@@ -9,11 +9,14 @@
 #include "vec.h"
 #include "utility.h"
 
-#define CONST_PI   3.1415926535897932
-#define CONST_C    299.792458
-#define CONST_HBAR 1.054571817679489e-22
-#define CONST_HK   7.6382325822577381
-#define CONST_EPS  1e-10
+#define CONST_PI            3.1415926535897932
+#define CONST_C             299.792458
+#define CONST_HBAR          1.054571817679489e-22
+#define CONST_HK            47.992430733662212
+#define CONST_APERY         1.2020569031595942
+#define CONST_WIEN          1.5936242600400401
+#define CONST_EPS           1e-10
+#define CONST_PLANCKMAX     0.6476102378919149
 
 #ifndef __GRID_H
 #define __GRID_H
@@ -87,7 +90,7 @@ struct Grid {
     
     void printOutside(int id) const;
     void printGrid() const;
-    void print() const;
+    void print(bool ALL = false) const;
     
     Grid();
     Grid(double x, double y, double z, unsigned int nx, unsigned int ny, unsigned int nz);
@@ -477,7 +480,7 @@ void Grid::printGrid() const {
     cout << endl;
 }
 
-void Grid::print() const {
+void Grid::print(bool ALL) const {
     //Some initial parameters for the loops
     unsigned long int k0, j0, l0;
     double val = 0;
@@ -486,7 +489,7 @@ void Grid::print() const {
     //Now loop through and print the grid
     for (unsigned long int i = 0; i < m.size(); i ++) {
         //Don't print if the grid is empty
-        if (isempty(i))
+        if (not ALL and isempty(i))
             continue;
     
         //print Key
@@ -676,13 +679,13 @@ long unsigned int Grid::ind1(const vec& x) const {
         //Force theta and phi to 0-(n-1) range (total size n)
         case (CoordinateSystem::Cartesian):
             xx = x.X + Lx/2;
-            ii = (xx > 0) ? (long unsigned int)(xx / Lx * nx)+1 : 0; if (ii > nx) ii = nx+1;
+            ii = (xx > 0) ? (long unsigned int) floor(xx / Lx * nx)+1 : 0; if (ii > nx) ii = nx+1;
             break;
         case (CoordinateSystem::Cylindrical):
-            ii = (long unsigned int)(x.r() / Lx * nx); if (ii >= nx) ii = nx;
+            ii = (long unsigned int) floor(x.r() / Lx * nx); if (ii >= nx) ii = nx;
             break;
         case (CoordinateSystem::Spherical):
-            ii = (long unsigned int)(x.norm() / Lx * nx); if (ii >= nx) ii = nx;
+            ii = (long unsigned int) floor(x.norm() / Lx * nx); if (ii >= nx) ii = nx;
             break;
     }
     return ii;
@@ -697,13 +700,13 @@ long unsigned int Grid::ind2(const vec& x) const {
         //Force theta and phi to 0-(n-1) range (total size n)
         case (CoordinateSystem::Cartesian):
             yy = x.Y + Ly/2;
-            jj = (yy > 0) ? (long unsigned int)(yy / Ly * ny)+1 : 0; if (jj > ny) jj = ny+1;
+            jj = (yy > 0) ? (long unsigned int) floor(yy / Ly * ny)+1 : 0; if (jj > ny) jj = ny+1;
             break;
         case (CoordinateSystem::Cylindrical):
-            jj = (long unsigned int)(fmod(x.theta(), 2*CONST_PI)*ny/2/CONST_PI); if (jj >= ny) jj = ny-1;
+            jj = (long unsigned int) floor(fmod(x.theta(), 2*CONST_PI)*ny/2/CONST_PI); if (jj >= ny) jj = ny-1;
             break;
         case (CoordinateSystem::Spherical):
-            jj = (long unsigned int)(fmod(x.theta(), 2*CONST_PI)*ny/2/CONST_PI); if (jj >= ny) jj = ny-1;
+            jj = (long unsigned int) floor(fmod(x.theta(), 2*CONST_PI)*ny/2/CONST_PI); if (jj >= ny) jj = ny-1;
             break;
     }
     return jj;
@@ -716,13 +719,13 @@ long unsigned int Grid::ind3(const vec& x) const {
         //Clip to 0 to n-1 range for r, and n for out of bounds (total size n+1)
         //Force theta and phi to 0-(n-1) range (total size n)
         case (CoordinateSystem::Cartesian):
-            kk = (x.Z > 0) ? (long unsigned int)(x.Z / Lz * nz)+1 : 0; if (kk > nz) kk = nz+1;
+            kk = (x.Z > 0) ? (long unsigned int) floor(x.Z / Lz * nz)+1 : 0; if (kk > nz) kk = nz+1;
             break;
         case (CoordinateSystem::Cylindrical):
-            kk = (x.Z > 0) ? (long unsigned int)(x.Z / Lz * nz)+1 : 0; if (kk > nz) kk = nz+1;
+            kk = (x.Z > 0) ? (long unsigned int) floor(x.Z / Lz * nz)+1 : 0; if (kk > nz) kk = nz+1;
             break;
         case (CoordinateSystem::Spherical):
-            kk = (long unsigned int)(fmod(x.phi(), CONST_PI)*nz/CONST_PI); if (kk >= nz) kk = nz-1;
+            kk = (long unsigned int) floor(fmod(x.phi(), CONST_PI)*nz/CONST_PI); if (kk >= nz) kk = nz-1;
             break;
     }
     return kk;
