@@ -33,10 +33,10 @@ class Spectrum {
         double max() const;
         double norm() const;
         double width() const;
+        bool peakLabel() const;
         
         string name() const;
         string paramstring() const;
-        void print(const string& label, const string& units, double scale=1) const;
         
         static void setFreqLimits(double f1, double f2);
         
@@ -63,11 +63,24 @@ Spectrum::Spectrum(SpectrumModel m, vector<double> vals) {
     S = vals;
 }
 
-void Spectrum::print(const string& label, const string& units, double scale) const {
-    cout << label << " model: " << name() << endl;
-    cout << "   Integrated " << label << ": " << norm()*scale << " " << units << "-THz" << endl;
-    cout << "   Peak " << label << ": " << max()*scale << " " << units << " at " << peak() << " THz" << endl;
-    cout << "   Width: " << width() << " THz" << endl;
+bool Spectrum::peakLabel() const {
+    switch (type) {
+        default:
+        case SpectrumModel::Gaussian :
+        case SpectrumModel::Cauchy :
+        case SpectrumModel::Laplace :
+        case SpectrumModel::Blackbody :
+        case SpectrumModel::Impulse :
+            return true;
+            break;
+        case SpectrumModel::Uniform :
+        case SpectrumModel::Constant : 
+        case SpectrumModel::Rayleigh :
+        case SpectrumModel::Binary :
+        case SpectrumModel::DoubleGauss :
+            return false;
+            break;
+    }
 }
 
 string Spectrum::name() const {

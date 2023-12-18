@@ -115,14 +115,28 @@ void Medium::print_at_f(double f) const {
 }
 
 void Medium::print() const {
-    
     cout << "Medium density: " << dens() << " um-3" << endl;
     cout << "Phase function: " << _phasemodelname(phase) << endl;
-    xca.print("Absorption cross-section", "um2", _Sa);
-    xcs.print("Scattering cross-section", "um2", _Ss);
+
+    cout << "Absorption cross-section model: " << xca.name() << endl;
+    cout << "   Integrated cross-section: " << xca.norm()*_Sa << " um2-THz" << endl;
+    cout << "   " << (xca.peakLabel() ? "Peak" : "Specified") << " value: " << xca.max()*_Sa;
+    cout << " um2 at " << xca.peak() << " THz" << endl;
+    cout << "   Width: " << xca.width() << " THz" << endl;
+
+    cout << "Scattering cross-section model: " << xcs.name() << endl;
+    cout << "   Integrated cross-section: " << xcs.norm()*_Ss << " um2-THz" << endl;
+    cout << "   " << (xcs.peakLabel() ? "Peak" : "Specified") << " value: " << xcs.max()*_Ss;
+    cout << " um2 at " << xcs.peak() << " THz" << endl;
+    cout << "   Width: " << xcs.width() << " THz" << endl;
+    
     cout << "Fluorescence spectrum model: " << xf.name() << endl;
-    cout << "   Fluorescence quantum yield: " << FQY() << endl;
-    cout << "   Peak fluorescence frequency: " << peak_v() << " THz" << endl << endl;
+    cout << "   Quantum yield: " << _FQY << endl;
+    cout << "   " << (xf.peakLabel() ? "Peak" : "Specified") << " value: " << xf.max()*_FQY/xf.norm();
+    cout << " THz-1 at " << xf.peak() << " THz" << endl;
+    cout << "   Width: " << xf.width() << " THz" << endl;
+    
+    cout << endl;
 }
 
 Medium::Medium(double Wmin, double Wmax) {
@@ -284,8 +298,8 @@ void Medium::writedb(ofstream& OF) const {
     OF << scientific << setprecision(8) << g() << ",";
     OF << scientific << setprecision(8) << Ss() << ",";
     OF << scientific << setprecision(8) << Sa() << ",";
-    OF << scientific << setprecision(8) << albedo();
-    OF << scientific << setprecision(8) << tau();
+    OF << scientific << setprecision(8) << albedo() << ",";
+    OF << scientific << setprecision(8) << tau() << ",";
     OF << scientific << setprecision(8) << FQY();
 }
 

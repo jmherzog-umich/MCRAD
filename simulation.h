@@ -319,6 +319,12 @@ void Simulation::printsettings() const {
         cout << "Theoretical max (dynamic) step count for absorption: " << ceil((ceil(log(Wmin)/log(medium.albedo())) + 1.0/Wm) / medium.we() / stats.dT) << endl;
     cout << endl;
     
+    //Fresnel coefficients
+    cout << "Fresnel coefficients:" << endl;
+    cout << "  R0  = " << Rspec << endl;
+    cout << "  Rx  = " << Rx << endl;
+    cout << "  T0  = " << Tspec << endl << endl;
+    
     //Print medium settings
     cout << "==================================================================" << endl;
     cout << "Medium properties" << endl;
@@ -342,13 +348,10 @@ void Simulation::printsettings() const {
     cam.printSetup();
         
     //Define output arrays
+    cout << "==================================================================" << endl;
+    cout << "Output grid settings" << endl;
+    cout << "==================================================================" << endl;
     grid.printGrid();
-        
-    //Fresnel coefficients
-    cout << "Fresnel coefficients:" << endl;
-    cout << "  R0  = " << Rspec << endl;
-    cout << "  Rx  = " << Rx << endl;
-    cout << "  T0  = " << Tspec << endl << endl;
     
     //Print the initial condition
     cout << "==================================================================" << endl;
