@@ -66,7 +66,7 @@ Spectrum::Spectrum(SpectrumModel m, vector<double> vals) {
 void Spectrum::print(const string& label, const string& units, double scale) const {
     cout << label << " model: " << name() << endl;
     cout << "   Integrated " << label << ": " << norm()*scale << " " << units << "-THz" << endl;
-    cout << "   Peak " << label << ": " << max() << " " << units << " at " << peak() << " THz" << endl;
+    cout << "   Peak " << label << ": " << max()*scale << " " << units << " at " << peak() << " THz" << endl;
     cout << "   Width: " << width() << " THz" << endl;
 }
 
