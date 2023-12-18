@@ -11,7 +11,7 @@ can be compiled with g++ using the following command
 
 ```
 g++ -std=c++17 -static -Ofast -o mcrad.o mcrad.cpp photon.h stats.h vec.h
- simulation.h utility.h medium.h beam.h camera.h image.h raypath.h -Wall
+ simulation.h utility.h medium.h beam.h camera.h image.h raypath.h spectrum.h -Wall
 ```
  
 MCRAD was compiled and tested on Windows 11 and Fedora 38 with GCC 13 and should
