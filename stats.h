@@ -77,9 +77,9 @@ struct Stats {
     
     //--Print results functions
     void setup();
-    void print() const;
-    void printTime() const;
-    void printFreq() const;
+    void print(ostream& oout) const;
+    void printTime(ostream& oout) const;
+    void printFreq(ostream& oout) const;
     
     void writedb(ofstream& OF) const;
     void writedbheader(ofstream& OF) const;
@@ -610,385 +610,385 @@ double Stats::initialize(const Photon& p, double m) {
     return R;
 }
 
-void Stats::printTime() const {
+void Stats::printTime(ostream& oout) const {
     //Print header
-    cout << endl << "Temporal profiles [photons/time step]:" << endl;
-    cout << "  T [ps]: ";
+    oout << endl << "Temporal profiles [photons/time step]:" << endl;
+    oout << "  T [ps]: ";
     for (int i = 0; i < Tres; i ++)
-        cout << scientific << setw(18) << dT * i;
+        oout << scientific << setw(18) << dT * i;
         
     //Now print the reflection/transmission/absorption data
-    cout << endl << "Incident: ";
+    oout << endl << "Incident: ";
     for (int i = 0; i < Tres; i ++)
-        cout << scientific << setw(18) << It.at(i);
-    cout << endl << "Rdiffuse: ";
+        oout << scientific << setw(18) << It.at(i);
+    oout << endl << "Rdiffuse: ";
     for (int i = 0; i < Tres; i ++)
-        cout << scientific << setw(18) << Rt.at(i);
-    cout << endl << "Tdiffuse: ";
+        oout << scientific << setw(18) << Rt.at(i);
+    oout << endl << "Tdiffuse: ";
     for (int i = 0; i < Tres; i ++)
-        cout << scientific << setw(18) << Tt.at(i);
-    cout << endl << "Ldiffuse: ";
+        oout << scientific << setw(18) << Tt.at(i);
+    oout << endl << "Ldiffuse: ";
     for (int i = 0; i < Tres; i ++)
-        cout << scientific << setw(18) << Lt.at(i);
-    cout << endl << "Adep:     ";
+        oout << scientific << setw(18) << Lt.at(i);
+    oout << endl << "Adep:     ";
     for (int i = 0; i < Tres; i ++)
-        cout << scientific << setw(18) << At.at(i);
+        oout << scientific << setw(18) << At.at(i);
     
     //If no fluorescence, exit here
     if (FGEN < CONST_EPS)
         return;
         
     //Otherwise print fluorescence
-    cout << endl << endl;
-    cout << " Tf [ps]: ";
+    oout << endl << endl;
+    oout << " Tf [ps]: ";
     for (int i = 0; i < Tres; i ++)
-        cout << scientific << setw(18) << dTf * (i+1);
-    cout << endl << "Femitted: ";
+        oout << scientific << setw(18) << dTf * (i+1);
+    oout << endl << "Femitted: ";
     for (int i = 0; i < Tres; i ++)
-        cout << scientific << setw(18) << Ft.at(i);
-    cout << endl << "Ffront:   ";
+        oout << scientific << setw(18) << Ft.at(i);
+    oout << endl << "Ffront:   ";
     for (int i = 0; i < Tres; i ++)
-        cout << scientific << setw(18) << Fft.at(i);
-    cout << endl << "Fback:    ";
+        oout << scientific << setw(18) << Fft.at(i);
+    oout << endl << "Fback:    ";
     for (int i = 0; i < Tres; i ++)
-        cout << scientific << setw(18) << Fbt.at(i);
-    cout << endl << "Fside:    ";
+        oout << scientific << setw(18) << Fbt.at(i);
+    oout << endl << "Fside:    ";
     for (int i = 0; i < Tres; i ++)
-        cout << scientific << setw(18) << Flt.at(i);
-    cout << endl << "Freabs:   ";
+        oout << scientific << setw(18) << Flt.at(i);
+    oout << endl << "Freabs:   ";
     for (int i = 0; i < Tres; i ++)
-        cout << scientific << setw(18) << Fat.at(i);
+        oout << scientific << setw(18) << Fat.at(i);
 }
 
-void Stats::printFreq() const {
+void Stats::printFreq(ostream& oout) const {
     //Print header
-    cout << endl << "Radiation frequency profiles [photons/freq. bin]:" << endl;
-    cout << " W [THz]: ";
+    oout << endl << "Radiation frequency profiles [photons/freq. bin]:" << endl;
+    oout << " W [THz]: ";
     for (int i = 0; i < Fres; i ++)
-        cout << scientific << setw(18) << dF * i + F0;
+        oout << scientific << setw(18) << dF * i + F0;
         
     //Now print the reflection/transmission/absorption data
-    cout << endl << "Incident: ";
+    oout << endl << "Incident: ";
     for (int i = 0; i < Fres; i ++)
-        cout << scientific << setw(18) << Iw.at(i);
-    cout << endl << "Rdiffuse: ";
+        oout << scientific << setw(18) << Iw.at(i);
+    oout << endl << "Rdiffuse: ";
     for (int i = 0; i < Fres; i ++)
-        cout << scientific << setw(18) << Rw.at(i);
-    cout << endl << "Tdiffuse: ";
+        oout << scientific << setw(18) << Rw.at(i);
+    oout << endl << "Tdiffuse: ";
     for (int i = 0; i < Fres; i ++)
-        cout << scientific << setw(18) << Tw.at(i);
-    cout << endl << "Ldiffuse: ";
+        oout << scientific << setw(18) << Tw.at(i);
+    oout << endl << "Ldiffuse: ";
     for (int i = 0; i < Fres; i ++)
-        cout << scientific << setw(18) << Lw.at(i);
-    cout << endl << "Adep:     ";
+        oout << scientific << setw(18) << Lw.at(i);
+    oout << endl << "Adep:     ";
     for (int i = 0; i < Fres; i ++)
-        cout << scientific << setw(18) << Aw.at(i);
+        oout << scientific << setw(18) << Aw.at(i);
     
     //If no fluorescence, exit here
     if (FGEN < CONST_EPS)
         return;
         
     //Otherwise print fluorescence
-    cout << endl << "Femitted: ";
+    oout << endl << "Femitted: ";
     for (int i = 0; i < Fres; i ++)
-        cout << scientific << setw(18) << Fw.at(i);
-    cout << endl << "Ffront:   ";
+        oout << scientific << setw(18) << Fw.at(i);
+    oout << endl << "Ffront:   ";
     for (int i = 0; i < Fres; i ++)
-        cout << scientific << setw(18) << Ffw.at(i);
-    cout << endl << "Fback:    ";
+        oout << scientific << setw(18) << Ffw.at(i);
+    oout << endl << "Fback:    ";
     for (int i = 0; i < Fres; i ++)
-        cout << scientific << setw(18) << Fbw.at(i);
-    cout << endl << "Fside:    ";
+        oout << scientific << setw(18) << Fbw.at(i);
+    oout << endl << "Fside:    ";
     for (int i = 0; i < Fres; i ++)
-        cout << scientific << setw(18) << Flw.at(i);
-    cout << endl << "Freabs:   ";
+        oout << scientific << setw(18) << Flw.at(i);
+    oout << endl << "Freabs:   ";
     for (int i = 0; i < Fres; i ++)
-        cout << scientific << setw(18) << Faw.at(i);
+        oout << scientific << setw(18) << Faw.at(i);
 }
 
-void Stats::print() const {
+void Stats::print(ostream& oout) const {
     
     //Theta-dependent reflection/transmission/fluorescence
-    cout<<endl;
-    cout<<"theta:      ";
+    oout<<endl;
+    oout<<"theta:      ";
     for (int i = 0; i < THETAres; i ++)
-        cout << fixed << setw(18) << i*dTHETA;
-    cout<<endl;
-    cout<<"R(theta):       ";
+        oout << fixed << setw(18) << i*dTHETA;
+    oout<<endl;
+    oout<<"R(theta):       ";
     for (int i = 0; i < THETAres; i ++)
-        cout << scientific << setw(18) << Rtheta.at(i)/PHI;
-    cout<<endl;
-    cout<<"Rs(theta):      ";
+        oout << scientific << setw(18) << Rtheta.at(i)/PHI;
+    oout<<endl;
+    oout<<"Rs(theta):      ";
     for (int i = 0; i < THETAres; i ++)
-        cout << scientific << setw(18) << Rstheta.at(i)/PHI;
-    cout<<endl;
-    cout<<"T(theta):       ";
+        oout << scientific << setw(18) << Rstheta.at(i)/PHI;
+    oout<<endl;
+    oout<<"T(theta):       ";
     for (int i = 0; i < THETAres; i ++)
-        cout << scientific << setw(18) << Ttheta.at(i)/PHI;
-    cout<<endl;
+        oout << scientific << setw(18) << Ttheta.at(i)/PHI;
+    oout<<endl;
     
     //Print fluorescence part
     if (FGEN > CONST_EPS) {
-        cout<<"Ffront(theta):  ";
+        oout<<"Ffront(theta):  ";
         for (int i = 0; i < THETAres; i ++)
-            cout << scientific << setw(18) << Fftheta.at(i)/PHI;
-        cout<<endl;
-        cout<<"Fback(theta):   ";
+            oout << scientific << setw(18) << Fftheta.at(i)/PHI;
+        oout<<endl;
+        oout<<"Fback(theta):   ";
         for (int i = 0; i < THETAres; i ++)
-            cout << scientific << setw(18) << Fbtheta.at(i)/PHI;
-        cout<<endl;
+            oout << scientific << setw(18) << Fbtheta.at(i)/PHI;
+        oout<<endl;
     }
     
     //Deposition energy moments (time)
     if (momentlvl > 0) {
-        cout <<endl;
-        cout << "Incident scatter";
+        oout <<endl;
+        oout << "Incident scatter";
         if (ADEP > CONST_EPS)
-            cout << ", Incident absorption";
+            oout << ", Incident absorption";
         if (FGEN > CONST_EPS)
-            cout << ", Fluorescence scatter, Fluorescence reabsorption";
-        cout << " moments (time) [ps**n]:" << endl;
-        cout << "  E[T]     = " << STMOMENT[0]/ASCAT;
+            oout << ", Fluorescence scatter, Fluorescence reabsorption";
+        oout << " moments (time) [ps**n]:" << endl;
+        oout << "  E[T]     = " << STMOMENT[0]/ASCAT;
         if (ADEP > CONST_EPS)
-            cout << "     " << TMOMENT[0]/ADEP;
+            oout << "     " << TMOMENT[0]/ADEP;
         if (FGEN > CONST_EPS)
-            cout << "     " << FSTMOMENT[0]/FSCAT << "     " << FTMOMENT[0]/FDEP;
+            oout << "     " << FSTMOMENT[0]/FSCAT << "     " << FTMOMENT[0]/FDEP;
             
     } if (momentlvl > 1) {
-        cout << endl << "  E[T2]    = " << STMOMENT[1]/ASCAT;
+        oout << endl << "  E[T2]    = " << STMOMENT[1]/ASCAT;
         if (ADEP > CONST_EPS)
-            cout << "     " << TMOMENT[1]/ADEP;
+            oout << "     " << TMOMENT[1]/ADEP;
         if (FGEN > CONST_EPS)
-            cout << "     " << FSTMOMENT[1]/FSCAT << "     " << FTMOMENT[1]/FDEP;
+            oout << "     " << FSTMOMENT[1]/FSCAT << "     " << FTMOMENT[1]/FDEP;
         
     } if (momentlvl > 2) {
-        cout << endl << "  E[T3]    = " << STMOMENT[2]/ASCAT;
+        oout << endl << "  E[T3]    = " << STMOMENT[2]/ASCAT;
         if (ADEP > CONST_EPS)
-            cout << "     " << TMOMENT[2]/ADEP;
+            oout << "     " << TMOMENT[2]/ADEP;
         if (FGEN > CONST_EPS)
-            cout << "     " << FSTMOMENT[2]/FSCAT << "     " << FTMOMENT[2]/FDEP;
+            oout << "     " << FSTMOMENT[2]/FSCAT << "     " << FTMOMENT[2]/FDEP;
             
     } if (momentlvl > 3) {
-        cout << endl << "  E[T4]    = " << STMOMENT[3]/ASCAT;
+        oout << endl << "  E[T4]    = " << STMOMENT[3]/ASCAT;
         if (ADEP > CONST_EPS)
-            cout << "     " << TMOMENT[3]/ADEP;
+            oout << "     " << TMOMENT[3]/ADEP;
         if (FGEN > CONST_EPS)
-            cout << "     " << FSTMOMENT[3]/FSCAT << "     " << FTMOMENT[3]/FDEP;
+            oout << "     " << FSTMOMENT[3]/FSCAT << "     " << FTMOMENT[3]/FDEP;
     }
-    cout << endl;
+    oout << endl;
     
     //Deposition energy moments (space)
     if (momentlvl > 0) {
     
         //Header
-        cout <<endl;
-        cout << "Incident scatter";
+        oout <<endl;
+        oout << "Incident scatter";
         if (ADEP > CONST_EPS)
-            cout << ", Incident absorption";
+            oout << ", Incident absorption";
         if (FGEN > CONST_EPS)
-            cout << ", Fluorescence scatter, Fluorescence reabsorption";
-        cout << " moments (space) [um**n]:" << endl;
+            oout << ", Fluorescence scatter, Fluorescence reabsorption";
+        oout << " moments (space) [um**n]:" << endl;
         
         //Moment Z
-        cout << "  E[Z]    = " << SMOMENTS[0]/ASCAT;
+        oout << "  E[Z]    = " << SMOMENTS[0]/ASCAT;
         if (ADEP > CONST_EPS)
-            cout << "     " << MOMENTS[0]/ADEP;
+            oout << "     " << MOMENTS[0]/ADEP;
         if (FGEN > CONST_EPS)
-            cout << "     " << FSMOMENTS[0]/FSCAT << "     " << FMOMENTS[0]/FDEP;
+            oout << "     " << FSMOMENTS[0]/FSCAT << "     " << FMOMENTS[0]/FDEP;
         
         //Moment R
-        cout << endl << "  E[R]    = " << SMOMENTS[1]/ASCAT;
+        oout << endl << "  E[R]    = " << SMOMENTS[1]/ASCAT;
         if (ADEP > CONST_EPS)
-            cout << "     " << MOMENTS[1]/ADEP;
+            oout << "     " << MOMENTS[1]/ADEP;
         if (FGEN > CONST_EPS)
-            cout << "     " << FSMOMENTS[1]/FSCAT << "     " << FMOMENTS[1]/FDEP;
+            oout << "     " << FSMOMENTS[1]/FSCAT << "     " << FMOMENTS[1]/FDEP;
             
     } if (momentlvl > 1) {
         //Moment Z*Z
-        cout << endl << "  E[Z2]   = " << SMOMENTS[2]/ASCAT;
+        oout << endl << "  E[Z2]   = " << SMOMENTS[2]/ASCAT;
         if (ADEP > CONST_EPS)
-            cout << "     " << MOMENTS[2]/ADEP;
+            oout << "     " << MOMENTS[2]/ADEP;
         if (FGEN > CONST_EPS)
-            cout << "     " << FSMOMENTS[2]/FSCAT << "     " << FMOMENTS[2]/FDEP;
+            oout << "     " << FSMOMENTS[2]/FSCAT << "     " << FMOMENTS[2]/FDEP;
         
         //Moment R*Z
-        cout << endl << "  E[RZ]   = " << SMOMENTS[3]/ASCAT;
+        oout << endl << "  E[RZ]   = " << SMOMENTS[3]/ASCAT;
         if (ADEP > CONST_EPS)
-            cout << "     " << MOMENTS[3]/ADEP;
+            oout << "     " << MOMENTS[3]/ADEP;
         if (FGEN > CONST_EPS)
-            cout << "     " << FSMOMENTS[3]/FSCAT << "     " << FMOMENTS[3]/FDEP;
+            oout << "     " << FSMOMENTS[3]/FSCAT << "     " << FMOMENTS[3]/FDEP;
         
         //Moment R*R
-        cout << endl << "  E[R2]   = " << SMOMENTS[4]/ASCAT;
+        oout << endl << "  E[R2]   = " << SMOMENTS[4]/ASCAT;
         if (ADEP > CONST_EPS)
-            cout << "     " << MOMENTS[4]/ADEP;
+            oout << "     " << MOMENTS[4]/ADEP;
         if (FGEN > CONST_EPS)
-            cout << "     " << FSMOMENTS[4]/FSCAT << "     " << FMOMENTS[4]/FDEP;
+            oout << "     " << FSMOMENTS[4]/FSCAT << "     " << FMOMENTS[4]/FDEP;
         
     } if (momentlvl > 2) {
         //Moment Z*Z*Z
-        cout << endl << "  E[Z3]   = " << SMOMENTS[5]/ASCAT;
+        oout << endl << "  E[Z3]   = " << SMOMENTS[5]/ASCAT;
         if (ADEP > CONST_EPS)
-            cout << "     " << MOMENTS[5]/ADEP;
+            oout << "     " << MOMENTS[5]/ADEP;
         if (FGEN > CONST_EPS)
-            cout << "     " << FSMOMENTS[5]/FSCAT << "     " << FMOMENTS[5]/FDEP;
+            oout << "     " << FSMOMENTS[5]/FSCAT << "     " << FMOMENTS[5]/FDEP;
 
         //Moment Z*Z*R
-        cout << endl << "  E[Z2R]  = " << SMOMENTS[6]/ASCAT;
+        oout << endl << "  E[Z2R]  = " << SMOMENTS[6]/ASCAT;
         if (ADEP > CONST_EPS)
-            cout << "     " << MOMENTS[6]/ADEP;
+            oout << "     " << MOMENTS[6]/ADEP;
         if (FGEN > CONST_EPS)
-            cout << "     " << FSMOMENTS[6]/FSCAT << "     " << FMOMENTS[6]/FDEP;
+            oout << "     " << FSMOMENTS[6]/FSCAT << "     " << FMOMENTS[6]/FDEP;
         
         //Moment Z*R*R
-        cout << endl << "  E[ZR2]  = " << SMOMENTS[7]/ASCAT;
+        oout << endl << "  E[ZR2]  = " << SMOMENTS[7]/ASCAT;
         if (ADEP > CONST_EPS)
-            cout << "     " << MOMENTS[7]/ADEP;
+            oout << "     " << MOMENTS[7]/ADEP;
         if (FGEN > CONST_EPS)
-            cout << "     " << FSMOMENTS[7]/FSCAT << "     " << FMOMENTS[7]/FDEP;
+            oout << "     " << FSMOMENTS[7]/FSCAT << "     " << FMOMENTS[7]/FDEP;
         
         //Moment R*R*R
-        cout << endl << "  E[R3]   = " << SMOMENTS[8]/ASCAT;
+        oout << endl << "  E[R3]   = " << SMOMENTS[8]/ASCAT;
         if (ADEP > CONST_EPS)
-            cout << "     " << MOMENTS[8]/ADEP;
+            oout << "     " << MOMENTS[8]/ADEP;
         if (FGEN > CONST_EPS)
-            cout << "     " << FSMOMENTS[8]/FSCAT << "     " << FMOMENTS[8]/FDEP;
+            oout << "     " << FSMOMENTS[8]/FSCAT << "     " << FMOMENTS[8]/FDEP;
             
     } if (momentlvl > 3) {
         //Moment Z*Z*Z*Z
-        cout << endl << "  E[Z4]   = " << SMOMENTS[9]/ASCAT;
+        oout << endl << "  E[Z4]   = " << SMOMENTS[9]/ASCAT;
         if (ADEP > CONST_EPS)
-            cout << "     " << MOMENTS[9]/ADEP;
+            oout << "     " << MOMENTS[9]/ADEP;
         if (FGEN > CONST_EPS)
-            cout << "     " << FSMOMENTS[9]/FSCAT << "     " << FMOMENTS[9]/FDEP;
+            oout << "     " << FSMOMENTS[9]/FSCAT << "     " << FMOMENTS[9]/FDEP;
         
         //Moment Z*Z*Z*R
-        cout << endl << "  E[Z3R]  = " << SMOMENTS[10]/ASCAT;
+        oout << endl << "  E[Z3R]  = " << SMOMENTS[10]/ASCAT;
         if (ADEP > CONST_EPS)
-            cout << "     " << MOMENTS[10]/ADEP;
+            oout << "     " << MOMENTS[10]/ADEP;
         if (FGEN > CONST_EPS)
-            cout << "     " << FSMOMENTS[10]/FSCAT << "     " << FMOMENTS[10]/FDEP;
+            oout << "     " << FSMOMENTS[10]/FSCAT << "     " << FMOMENTS[10]/FDEP;
         
         //Moment Z*Z*R*R
-        cout << endl << "  E[Z2R2] = " << SMOMENTS[11]/ASCAT;
+        oout << endl << "  E[Z2R2] = " << SMOMENTS[11]/ASCAT;
         if (ADEP > CONST_EPS)
-            cout << "     " << MOMENTS[11]/ADEP;
+            oout << "     " << MOMENTS[11]/ADEP;
         if (FGEN > CONST_EPS)
-            cout << "     " << FSMOMENTS[11]/FSCAT << "     " << FMOMENTS[11]/FDEP;
+            oout << "     " << FSMOMENTS[11]/FSCAT << "     " << FMOMENTS[11]/FDEP;
         
         //Moment Z*R*R
-        cout << endl << "  E[ZR3]  = " << SMOMENTS[12]/ASCAT;
+        oout << endl << "  E[ZR3]  = " << SMOMENTS[12]/ASCAT;
         if (ADEP > CONST_EPS)
-            cout << "     " << MOMENTS[12]/ADEP;
+            oout << "     " << MOMENTS[12]/ADEP;
         if (FGEN > CONST_EPS)
-            cout << "     " << FSMOMENTS[12]/FSCAT << "     " << FMOMENTS[12]/FDEP;
+            oout << "     " << FSMOMENTS[12]/FSCAT << "     " << FMOMENTS[12]/FDEP;
         
         //Moment R*R*R*R
-        cout << endl << "  E[R4]   = " << SMOMENTS[13]/ASCAT;
+        oout << endl << "  E[R4]   = " << SMOMENTS[13]/ASCAT;
         if (ADEP > CONST_EPS)
-            cout << "     " << MOMENTS[13]/ADEP;
+            oout << "     " << MOMENTS[13]/ADEP;
         if (FGEN > CONST_EPS)
-            cout << "     " << FSMOMENTS[13]/FSCAT << "     " << FMOMENTS[13]/FDEP;
+            oout << "     " << FSMOMENTS[13]/FSCAT << "     " << FMOMENTS[13]/FDEP;
     }
     
     //Transmission angle moments
     if (momentlvl > 0) {
-        cout << endl << endl;
-        cout << "Transmission";
+        oout << endl << endl;
+        oout << "Transmission";
         if (FGEN > CONST_EPS)
-            cout << "/Emission";
-        cout << " angle moments (R/T";
+            oout << "/Emission";
+        oout << " angle moments (R/T";
         if (FGEN > CONST_EPS)
-            cout << "/Ff/Fb";
-        cout << " [-], E[THETA**n] [rad**n]):";
-        cout << endl << "  R     = " << fixed << Rdiffuse/PHI << ",";
+            oout << "/Ff/Fb";
+        oout << " [-], E[THETA**n] [rad**n]):";
+        oout << endl << "  R     = " << fixed << Rdiffuse/PHI << ",";
         for (int i = 0; i < 4; i ++)
-            cout << " " << fixed << setw(10) << THMOMENT[i]/Rdiffuse;
-        cout << endl << "  T     = " << fixed << Tdiffuse/PHI << ",";
+            oout << " " << fixed << setw(10) << THMOMENT[i]/Rdiffuse;
+        oout << endl << "  T     = " << fixed << Tdiffuse/PHI << ",";
         for (int i = 4; i < 8; i ++)
-            cout << " " << fixed << setw(10) << THMOMENT[i]/Tdiffuse;
+            oout << " " << fixed << setw(10) << THMOMENT[i]/Tdiffuse;
         if (FGEN > CONST_EPS) {
-            cout << endl << "  Ff    = " << fixed << Ff/PHI << ",";
+            oout << endl << "  Ff    = " << fixed << Ff/PHI << ",";
             for (int i = 0; i < 4; i ++)
-                cout << " " << fixed << setw(10) << FTHMOMENT[i]/Ff;
-            cout << endl << "  Fb    = " << fixed << Fb/PHI << ",";
+                oout << " " << fixed << setw(10) << FTHMOMENT[i]/Ff;
+            oout << endl << "  Fb    = " << fixed << Fb/PHI << ",";
             for (int i = 4; i < 8; i ++)
-                cout << " " << fixed << setw(10) << FTHMOMENT[i]/Fb;
+                oout << " " << fixed << setw(10) << FTHMOMENT[i]/Fb;
         
         }
     }
-    cout<<endl;
+    oout<<endl;
     
     //Print time dependence
-    printTime();
-    cout << endl;
+    printTime(oout);
+    oout << endl;
     
     //Print frequency dependence
-    printFreq();
-    cout << endl << endl;
+    printFreq(oout);
+    oout << endl << endl;
     
     //Reflection coefficients (total)
-    cout << "Reflection/Transmission/Absorption";
+    oout << "Reflection/Transmission/Absorption";
     if (FGEN > CONST_EPS)
-        cout << "/Emission";
-    cout << " coefficients [photon/source photon]:" << endl;
-    cout << "  Rdiffuse   = " << fixed << setw(10) << Rdiffuse/PHI;
+        oout << "/Emission";
+    oout << " coefficients [photon/source photon]:" << endl;
+    oout << "  Rdiffuse   = " << fixed << setw(10) << Rdiffuse/PHI;
     if (FGEN > CONST_EPS)
-        cout << "     " << "  Fgen       = " << fixed << setw(10) << FGEN/PHI;
-    cout << endl << "  Rspecular  = " << fixed << setw(10) << Rspec/PHI;
+        oout << "     " << "  Fgen       = " << fixed << setw(10) << FGEN/PHI;
+    oout << endl << "  Rspecular  = " << fixed << setw(10) << Rspec/PHI;
     if (FGEN > CONST_EPS)
-        cout << "     " << "  Ffront     = " << fixed << setw(10) << Ff/PHI;
-    cout << endl << "  Tdiffuse   = " << fixed << setw(10) << (Tdiffuse-Tballistic)/PHI;
+        oout << "     " << "  Ffront     = " << fixed << setw(10) << Ff/PHI;
+    oout << endl << "  Tdiffuse   = " << fixed << setw(10) << (Tdiffuse-Tballistic)/PHI;
     if (FGEN > CONST_EPS)
-        cout << "     " << "  Fback      = " << fixed << setw(10) << Fb/PHI;
-    cout << endl << "  Tballistic = " << fixed << setw(10) << Tballistic/PHI;
+        oout << "     " << "  Fback      = " << fixed << setw(10) << Fb/PHI;
+    oout << endl << "  Tballistic = " << fixed << setw(10) << Tballistic/PHI;
     if (FGEN > CONST_EPS)
-        cout << "     " << "  Fside      = " << fixed << setw(10) << Fl/PHI;
-    cout << endl << "  Ldiffuse   = " << fixed << setw(10) << Ldiffuse/PHI;
+        oout << "     " << "  Fside      = " << fixed << setw(10) << Fl/PHI;
+    oout << endl << "  Ldiffuse   = " << fixed << setw(10) << Ldiffuse/PHI;
     if (FGEN > CONST_EPS)
-        cout << "     " << "  Fabs       = " << fixed << setw(10) << FDEP/PHI;
-    cout << endl << "  A          = " << fixed << setw(10) << ADEP/PHI << endl << endl;
-    cout << endl << "Checking for math errors:" << endl;
-    cout << "     1 - (Rd + Rs + Td + Tb + A + Ld)   ?=  0  =  " << 1-(Rdiffuse + Rspec + Tdiffuse + ADEP + Ldiffuse) / PHI << endl;
+        oout << "     " << "  Fabs       = " << fixed << setw(10) << FDEP/PHI;
+    oout << endl << "  A          = " << fixed << setw(10) << ADEP/PHI << endl << endl;
+    oout << endl << "Checking for math errors:" << endl;
+    oout << "     1 - (Rd + Rs + Td + Tb + A + Ld)   ?=  0  =  " << 1-(Rdiffuse + Rspec + Tdiffuse + ADEP + Ldiffuse) / PHI << endl;
     if (FGEN > CONST_EPS)
-        cout << "     Fg - (Ff + Fb + Fl + Fa)      ?=  0  =  " << (FGEN - Ff - Fb - Fl - FDEP) / PHI << endl;
+        oout << "     Fg - (Ff + Fb + Fl + Fa)      ?=  0  =  " << (FGEN - Ff - Fb - Fl - FDEP) / PHI << endl;
     if (FGEN > CONST_EPS)
-        cout << "     Fg / A   =  " << FGEN / ADEP << endl;
+        oout << "     Fg / A   =  " << FGEN / ADEP << endl;
     
     //Reflection time/order
-    cout << endl << endl;
-    cout << "Diffuse Reflection/Transmission scattering order (mean, std) [-] and duration (mean, std) [ps]:" << endl;
+    oout << endl << endl;
+    oout << "Diffuse Reflection/Transmission scattering order (mean, std) [-] and duration (mean, std) [ps]:" << endl;
     if (Rdiffuse > CONST_EPS)
-        cout << "  N[Rdiffuse]      = " << fixed << setw(10) << Nr / Rdiffuse << endl;
+        oout << "  N[Rdiffuse]      = " << fixed << setw(10) << Nr / Rdiffuse << endl;
     if (Tdiffuse > CONST_EPS)
-        cout << "  N[Tdiffuse]      = " << fixed << setw(10) << Nt / Tdiffuse << endl;
+        oout << "  N[Tdiffuse]      = " << fixed << setw(10) << Nt / Tdiffuse << endl;
     if (ADEP > CONST_EPS)
-        cout << "  N[A]             = " << fixed << setw(10) << Na / ADEP << endl;
+        oout << "  N[A]             = " << fixed << setw(10) << Na / ADEP << endl;
     if (Rdiffuse > CONST_EPS)
-        cout << "  dN[Rdiffuse]     = " << fixed << setw(10) << sqrt(N2r*Rdiffuse - Nr*Nr) / Rdiffuse << endl;
+        oout << "  dN[Rdiffuse]     = " << fixed << setw(10) << sqrt(N2r*Rdiffuse - Nr*Nr) / Rdiffuse << endl;
     if (Tdiffuse > CONST_EPS)
-        cout << "  dN[Tdiffuse]     = " << fixed << setw(10) << sqrt(N2t*Tdiffuse - Nt*Nt) / Tdiffuse << endl;
+        oout << "  dN[Tdiffuse]     = " << fixed << setw(10) << sqrt(N2t*Tdiffuse - Nt*Nt) / Tdiffuse << endl;
     if (ADEP > CONST_EPS)
-        cout << "  dN[A]            = " << fixed << setw(10) << sqrt(N2a*ADEP - Na*Na) / ADEP << endl;
+        oout << "  dN[A]            = " << fixed << setw(10) << sqrt(N2a*ADEP - Na*Na) / ADEP << endl;
     if (Rdiffuse > CONST_EPS)
-        cout << "  t[Rdiffuse]      = " << fixed << setw(10) << tRd / Rdiffuse << endl;
+        oout << "  t[Rdiffuse]      = " << fixed << setw(10) << tRd / Rdiffuse << endl;
     if (Tdiffuse > CONST_EPS)
-        cout << "  t[Tdiffuse]      = " << fixed << setw(10) << tTd / Tdiffuse << endl;
+        oout << "  t[Tdiffuse]      = " << fixed << setw(10) << tTd / Tdiffuse << endl;
     if (ADEP > CONST_EPS)
-        cout << "  t[A]             = " << fixed << setw(10) << ta / ADEP << endl;
+        oout << "  t[A]             = " << fixed << setw(10) << ta / ADEP << endl;
     if (Rdiffuse > CONST_EPS)
-        cout << "  dt[Rdiffuse]     = " << fixed << setw(10) << sqrt(t2Rd*Rdiffuse - tRd*tRd) / Rdiffuse << endl;
+        oout << "  dt[Rdiffuse]     = " << fixed << setw(10) << sqrt(t2Rd*Rdiffuse - tRd*tRd) / Rdiffuse << endl;
     if (Tdiffuse > CONST_EPS)
-        cout << "  dt[Tdiffuse]     = " << fixed << setw(10) << sqrt(t2Td*Tdiffuse - tTd*tTd) / Tdiffuse << endl;
+        oout << "  dt[Tdiffuse]     = " << fixed << setw(10) << sqrt(t2Td*Tdiffuse - tTd*tTd) / Tdiffuse << endl;
     if (ADEP > CONST_EPS)
-        cout << "  dt[A]            = " << fixed << setw(10) << sqrt(t2a*ADEP - ta*ta) / ADEP << endl;
+        oout << "  dt[A]            = " << fixed << setw(10) << sqrt(t2a*ADEP - ta*ta) / ADEP << endl;
 
     //Diffusion coefficient
-    cout << endl << endl;
-    cout << "Diffusion coefficients [um2/ps]:" << endl;
-    cout << "  Dx = " << DX/ND/2.0 << endl;
-    cout << "  Dy = " << DY/ND/2.0 << endl;
-    cout << "  Dz = " << DZ/ND/2.0 << endl;
+    oout << endl << endl;
+    oout << "Diffusion coefficients [um2/ps]:" << endl;
+    oout << "  Dx = " << DX/ND/2.0 << endl;
+    oout << "  Dy = " << DY/ND/2.0 << endl;
+    oout << "  Dz = " << DZ/ND/2.0 << endl;
 }
 
 void Stats::writedbheader(ofstream& OF) const {

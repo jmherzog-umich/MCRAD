@@ -55,9 +55,9 @@ struct Camera {
         Camera(int n, double Lpx, double M, double fn, double fl, bool interference = false);
         Camera(int n, double Lpx, double M, double fn, double fl, const vec& pos, const vec& mu, bool interference = false);
         
-        void print() const;
-        void printGrid() const;
-        void printSetup() const;
+        void print(ostream& oout) const;
+        void printGrid(ostream& oout) const;
+        void printSetup(ostream& oout) const;
     
         ///TODO: IMPLEMENT THESE
         double fmin, fmax;  //Cutoff bands (in THz!) for filter. If both are zero, the filter is off.
@@ -229,56 +229,56 @@ Camera::Camera(int n, double Lpx, double M, double fn, double fl, const vec& pos
     this->setup();
 }
 
-void Camera::print() const {
+void Camera::print(ostream& oout) const {
     for (int i = 0; i < 2*ny+1; i ++) {
         for (int j = 0; j < 2*nx + 1; j ++)
-            cout << scientific << setw(18) << I.at((2*nx+1)*i + j);
-        cout << endl;
+            oout << scientific << setw(18) << I.at((2*nx+1)*i + j);
+        oout << endl;
     }
-    cout << endl;
+    oout << endl;
 }
 
-void Camera::printGrid() const {
-    cout << "NOTE: CAMERA SIMULATION MODULE IS NOT COMPLETE. DO NOT RELY ON THESE RESULTS. " << endl;
-    cout << "Image domain (W,H):   " << (2*nx+1)*Lpx/abs(M()) << " x " << (2*ny+1)*Lpx/abs(M()) << " um";
-    cout << endl << "  X:     ";
-    for (int i = -nx; i <= nx; i ++) cout << scientific << setw(18) << i*Lpx/abs(M());
-    cout << endl << "  Y:     ";
-    for (int i = -ny; i <= ny; i ++) cout << scientific << setw(18) << i*Lpx/abs(M());
-    cout << endl << endl;
+void Camera::printGrid(ostream& oout) const {
+    oout << "NOTE: CAMERA SIMULATION MODULE IS NOT COMPLETE. DO NOT RELY ON THESE RESULTS. " << endl;
+    oout << "Image domain (W,H):   " << (2*nx+1)*Lpx/abs(M()) << " x " << (2*ny+1)*Lpx/abs(M()) << " um";
+    oout << endl << "  X:     ";
+    for (int i = -nx; i <= nx; i ++) oout << scientific << setw(18) << i*Lpx/abs(M());
+    oout << endl << "  Y:     ";
+    for (int i = -ny; i <= ny; i ++) oout << scientific << setw(18) << i*Lpx/abs(M());
+    oout << endl << endl;
 }
 
-void Camera::printSetup() const {
+void Camera::printSetup(ostream& oout) const {
     vec right = mu.perp(CONST_PI/2);
     vec up = mu.perp(0);
     
-    cout << "NOTE: CAMERA SIMULATION MODULE IS NOT COMPLETE. DO NOT RELY ON THESE RESULTS. " << endl;
-    cout << "Camera lens focal length: " << fixed << F/1000 << " mm" << endl;
-    cout << "Camera lens f-number: " << fixed << f << endl;
-    cout << "Camera lens magnification: " << fixed << M() << endl;
-    cout << "Object-plane pixel size: " << fixed << Lpx / abs(M()) << " um" << endl;
-    cout << "Pixel size: " << fixed << Lpx << " um" << endl;
-    cout << "Pixel count: " << fixed << (2*nx+1) << " x " << (2*ny+1) << endl;
-    cout << "Detector size: " << fixed << (2*nx+1)*Lpx/1000 << " x " << (2*ny+1)*Lpx/1000 << " mm" << endl;
-    cout << "ROI size: " << fixed << (2*nx+1)*Lpx/1000/abs(M()) << " x " << (2*ny+1)*Lpx/1000/abs(M()) << " mm" << endl;
-    cout << "Camera lens diameter: " << fixed << D()/1000 << " mm" << endl;
-    cout << "Collection half-angle: " << fixed << acos(cosTheta()) << ", " << acos(cosTheta())*180/CONST_PI << " rad, deg" << endl;
-    cout << "Collection solid-angle: " << fixed << Omega() << " sr" << endl;
-    cout << "Collection fraction: " << fixed << Omega()/4/CONST_PI << endl;
-    cout << "Object distance: " << fixed << So / 1000 << " mm" << endl;
-    cout << "Image distance: " << fixed << -So * M() / 1000 << " mm" << endl;
-    cout << "Depth of focus: " << fixed << t()/1000 << " mm" << endl;
-    cout << "Lens position: " << "<" << fixed << pos.X/1000 << ", " << pos.Y/1000 << ", " << pos.Z/1000 << "> mm" << endl;
-    cout << "Lens normal: " << "<" << fixed << mu.X << ", " << mu.Y << ", " << mu.Z << ">" << endl;
-    cout << "Camera x-direction: " << "<" << fixed << right.X << ", " << right.Y << ", " << right.Z << ">" << endl;
-    cout << "Camera y-direction: " << "<" << fixed << up.X << ", " << up.Y << ", " << up.Z << ">" << endl;
-    cout << "<NOT IMPLEMENTED YET> Filter bands: " << fmin << "   to   " << fmax << " THz" << endl;
-    cout << "<NOT IMPLEMENTED YET> Gate time: " << ton << "   to   " << toff << " ps" << endl;
-    cout << "<NOT IMPLEMENTED YET> Diffraction: " << ((diffraction) ? "True" : "False") << endl;
-    cout << "<NOT IMPLEMENTED YET> Interference: " << ((interfere) ? "True" : "False") << endl;
+    oout << "NOTE: CAMERA SIMULATION MODULE IS NOT COMPLETE. DO NOT RELY ON THESE RESULTS. " << endl;
+    oout << "Camera lens focal length: " << fixed << F/1000 << " mm" << endl;
+    oout << "Camera lens f-number: " << fixed << f << endl;
+    oout << "Camera lens magnification: " << fixed << M() << endl;
+    oout << "Object-plane pixel size: " << fixed << Lpx / abs(M()) << " um" << endl;
+    oout << "Pixel size: " << fixed << Lpx << " um" << endl;
+    oout << "Pixel count: " << fixed << (2*nx+1) << " x " << (2*ny+1) << endl;
+    oout << "Detector size: " << fixed << (2*nx+1)*Lpx/1000 << " x " << (2*ny+1)*Lpx/1000 << " mm" << endl;
+    oout << "ROI size: " << fixed << (2*nx+1)*Lpx/1000/abs(M()) << " x " << (2*ny+1)*Lpx/1000/abs(M()) << " mm" << endl;
+    oout << "Camera lens diameter: " << fixed << D()/1000 << " mm" << endl;
+    oout << "Collection half-angle: " << fixed << acos(cosTheta()) << ", " << acos(cosTheta())*180/CONST_PI << " rad, deg" << endl;
+    oout << "Collection solid-angle: " << fixed << Omega() << " sr" << endl;
+    oout << "Collection fraction: " << fixed << Omega()/4/CONST_PI << endl;
+    oout << "Object distance: " << fixed << So / 1000 << " mm" << endl;
+    oout << "Image distance: " << fixed << -So * M() / 1000 << " mm" << endl;
+    oout << "Depth of focus: " << fixed << t()/1000 << " mm" << endl;
+    oout << "Lens position: " << "<" << fixed << pos.X/1000 << ", " << pos.Y/1000 << ", " << pos.Z/1000 << "> mm" << endl;
+    oout << "Lens normal: " << "<" << fixed << mu.X << ", " << mu.Y << ", " << mu.Z << ">" << endl;
+    oout << "Camera x-direction: " << "<" << fixed << right.X << ", " << right.Y << ", " << right.Z << ">" << endl;
+    oout << "Camera y-direction: " << "<" << fixed << up.X << ", " << up.Y << ", " << up.Z << ">" << endl;
+    oout << "<NOT IMPLEMENTED YET> Filter bands: " << fmin << "   to   " << fmax << " THz" << endl;
+    oout << "<NOT IMPLEMENTED YET> Gate time: " << ton << "   to   " << toff << " ps" << endl;
+    oout << "<NOT IMPLEMENTED YET> Diffraction: " << ((diffraction) ? "True" : "False") << endl;
+    oout << "<NOT IMPLEMENTED YET> Interference: " << ((interfere) ? "True" : "False") << endl;
     if (interfere)
-        cout << "      " << ((subjective) ? "Subjective" : "Objective") << " interference pattern" << endl;
-    cout << endl;
+        oout << "      " << ((subjective) ? "Subjective" : "Objective") << " interference pattern" << endl;
+    oout << endl;
 }
 
 #endif

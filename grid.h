@@ -88,9 +88,9 @@ struct Grid {
     
     double intersect(const vec& x, const vec& mu) const;
     
-    void printOutside(int id) const;
-    void printGrid() const;
-    void print(bool ALL = false) const;
+    void printOutside(ostream& oout, int id) const;
+    void printGrid(ostream& oout) const;
+    void print(ostream& oout, bool ALL = false) const;
     
     Grid();
     Grid(double x, double y, double z, unsigned int nx, unsigned int ny, unsigned int nz);
@@ -411,76 +411,76 @@ long unsigned int Grid::sub2ind(long unsigned int i, long unsigned int j, long u
     return I;
 }
 
-void Grid::printGrid() const {
+void Grid::printGrid(ostream& oout) const {
     //Print the domain and number of data points
     switch (sys) {
         case CoordinateSystem::Cartesian:
-            cout << "Cartesian simulation Domain (X,Y,Z): " << Lx << " um, " << Ly << " um," << Lz << " um" << endl;
-            cout << "Grid points (nX,nY,nZ): ";
+            oout << "Cartesian simulation Domain (X,Y,Z): " << Lx << " um, " << Ly << " um," << Lz << " um" << endl;
+            oout << "Grid points (nX,nY,nZ): ";
             break;
         case CoordinateSystem::Cylindrical:
-            cout << "Cylindrical simulation Domain (R,Theta,Z): " << Lx << " um, " << "2pi rad, " << Lz << " um" << endl;
-            cout << "Grid points (nR,nTheta,nZ): ";
+            oout << "Cylindrical simulation Domain (R,Theta,Z): " << Lx << " um, " << "2pi rad, " << Lz << " um" << endl;
+            oout << "Grid points (nR,nTheta,nZ): ";
             break;
         case CoordinateSystem::Spherical:
-            cout << "Spherical simulation Domain (R,Theta,Phi): " << Lx << " um, " << "2pi rad, pi rad" << endl;
-            cout << "Grid points (nR,nTheta,nPhi): "; 
+            oout << "Spherical simulation Domain (R,Theta,Phi): " << Lx << " um, " << "2pi rad, pi rad" << endl;
+            oout << "Grid points (nR,nTheta,nPhi): "; 
             break;
     }
-    cout << nx << ", " << ny << ", " << nz << "    Total elements: " << nx*ny*nz << endl;
+    oout << nx << ", " << ny << ", " << nz << "    Total elements: " << nx*ny*nz << endl;
     
     //Print the grid vectors
     switch (sys) {
         case CoordinateSystem::Cartesian:
             if (nx > 1) {
-                cout << "X_center [um]:     ";
-                for (long unsigned int i = 0; i < nx; i ++) cout << scientific << setw(18) << (i+0.5) * Lx/nx - Lx/2;
-                cout << endl;
+                oout << "X_center [um]:     ";
+                for (long unsigned int i = 0; i < nx; i ++) oout << scientific << setw(18) << (i+0.5) * Lx/nx - Lx/2;
+                oout << endl;
             } if (ny > 1) {
-                cout << "Y_center [um]:     ";
-                for (long unsigned int i = 0; i < ny; i ++) cout << scientific << setw(18) << (i+0.5) * Ly/ny - Ly/2;
-                cout << endl;
+                oout << "Y_center [um]:     ";
+                for (long unsigned int i = 0; i < ny; i ++) oout << scientific << setw(18) << (i+0.5) * Ly/ny - Ly/2;
+                oout << endl;
             } if (nz > 1) {
-                cout << "Z_center [um]:     ";
-                for (long unsigned int i = 0; i < nz; i ++) cout << scientific << setw(18) << (i+0.5) * Lz/nz;
-                cout << endl;
+                oout << "Z_center [um]:     ";
+                for (long unsigned int i = 0; i < nz; i ++) oout << scientific << setw(18) << (i+0.5) * Lz/nz;
+                oout << endl;
             }
             break;
         case CoordinateSystem::Cylindrical:
             if (nx > 1) {
-                cout << "R_center [um]:     ";
-                for (long unsigned int i = 0; i < nx; i ++) cout << scientific << setw(18) << (i+0.5) * Lx/nx;
-                cout << endl;
+                oout << "R_center [um]:     ";
+                for (long unsigned int i = 0; i < nx; i ++) oout << scientific << setw(18) << (i+0.5) * Lx/nx;
+                oout << endl;
             } if (ny > 1) {
-                cout << "Theta_center [um]: ";
-                for (long unsigned int i = 0; i < ny; i ++) cout << scientific << setw(18) << (i+0.5) * Ly/2/CONST_PI;
-                cout << endl;
+                oout << "Theta_center [um]: ";
+                for (long unsigned int i = 0; i < ny; i ++) oout << scientific << setw(18) << (i+0.5) * Ly/2/CONST_PI;
+                oout << endl;
             } if (nz > 1) {
-                cout << "Z_center [um]:     ";
-                for (long unsigned int i = 0; i < nz; i ++) cout << scientific << setw(18) << (i+0.5) * Lz/nz;
-                cout << endl;
+                oout << "Z_center [um]:     ";
+                for (long unsigned int i = 0; i < nz; i ++) oout << scientific << setw(18) << (i+0.5) * Lz/nz;
+                oout << endl;
             }
             break;
         case CoordinateSystem::Spherical:
             if (nx > 1) {
-                cout << "R_center [um]:     ";
-                for (long unsigned int i = 0; i < nx; i ++) cout << scientific << setw(18) << (i+0.5) * Lx/nx;
-                cout << endl;
+                oout << "R_center [um]:     ";
+                for (long unsigned int i = 0; i < nx; i ++) oout << scientific << setw(18) << (i+0.5) * Lx/nx;
+                oout << endl;
             } if (ny > 1) {
-                cout << "Theta_center [um]: ";
-                for (long unsigned int i = 0; i < ny; i ++) cout << scientific << setw(18) << (i+0.5) * Ly/2/CONST_PI;
-                cout << endl;
+                oout << "Theta_center [um]: ";
+                for (long unsigned int i = 0; i < ny; i ++) oout << scientific << setw(18) << (i+0.5) * Ly/2/CONST_PI;
+                oout << endl;
             } if (nz > 1) {
-                cout << "Phi_center [um]:   ";
-                for (long unsigned int i = 0; i < nz; i ++) cout << scientific << setw(18) << (i+0.5) * Lz/CONST_PI;
-                cout << endl;
+                oout << "Phi_center [um]:   ";
+                for (long unsigned int i = 0; i < nz; i ++) oout << scientific << setw(18) << (i+0.5) * Lz/CONST_PI;
+                oout << endl;
             }
             break;
     }
-    cout << endl;
+    oout << endl;
 }
 
-void Grid::print(bool ALL) const {
+void Grid::print(ostream& oout, bool ALL) const {
     //Some initial parameters for the loops
     unsigned long int k0, j0, l0;
     double val = 0;
@@ -496,23 +496,23 @@ void Grid::print(bool ALL) const {
         switch (sys) {
             case CoordinateSystem::Cartesian:
                 if (ny > 1)
-                    cout << "[X, Y, Z]";
+                    oout << "[X, Y, Z]";
                 else
-                    cout << "[X, Z]";
+                    oout << "[X, Z]";
                 k0 = 1; j0 = 1; l0 = 1;
                 break;
             case CoordinateSystem::Cylindrical:
                 if (ny > 1)
-                    cout << "[R, Theta, Z]";
+                    oout << "[R, Theta, Z]";
                 else
-                    cout << "[R, Z]";
+                    oout << "[R, Z]";
                 k0 = 1; j0 = 0; l0 = 0;
                 break;
             case CoordinateSystem::Spherical:
                 if (ny > 1)
-                    cout << "[R, Theta, Phi]";
+                    oout << "[R, Theta, Phi]";
                 else
-                    cout << "[R, Phi]";
+                    oout << "[R, Phi]";
                 k0 = 0; j0 = 0; l0 = 0;
                 break;
         }
@@ -520,35 +520,35 @@ void Grid::print(bool ALL) const {
         //Print the key name
         val = 0;
         for (unsigned long int z = 0; z < m.at(i).size(); z ++) val += m.at(i).at(z);
-        cout << "   " << labels.at(i) << "   SUM=" << val << "   (" << sum(i) << ")" << endl;
+        oout << "   " << labels.at(i) << "   SUM=" << val << "   (" << sum(i) << ")" << endl;
         
         //Now print the data
         for (unsigned long int k = k0; k < (k0+nz); k ++) {                //Blocks    
             for (unsigned long int l = l0; l < (l0+ny); l ++) {            //Rows
                 for (unsigned long int j = j0; j < (j0+nx); j ++)          //Columns
-                    cout << scientific << setw(18) << m.at(i).at(sub2ind(j, l, k));
+                    oout << scientific << setw(18) << m.at(i).at(sub2ind(j, l, k));
             //Skip line after each row
-            cout << endl;
+            oout << endl;
             }
         //Skip an extra line after each block ONLY IF WE HAVE MULTIPLE LINES PER BLOCK
         if (ny > 1)
-            cout << endl;
+            oout << endl;
         }
     //Now print the elements outside the grid
-    printOutside(i);
+    printOutside(oout, i);
     
     //Skip an extra line for fun
-    cout << endl;   
+    oout << endl;   
     }
 }
 
-void Grid::printOutside(int id) const {
+void Grid::printOutside(ostream& oout, int id) const {
     //Initialize some stuff
     stringstream ss;    
     double tmp = 0;
     
     //Prepare to print
-    cout << endl;
+    oout << endl;
     switch (sys) {
         //Now switch based on CS type
         case CoordinateSystem::Cartesian:
@@ -562,9 +562,9 @@ void Grid::printOutside(int id) const {
                 }
                 ss << endl;
             }
-            cout << "    [X, Y; Z <  0]: " << tmp << endl;
+            oout << "    [X, Y; Z <  0]: " << tmp << endl;
             if (tmp > CONST_EPS)
-                cout << ss.str() << endl;
+                oout << ss.str() << endl;
             
             //Back surface
             tmp = 0; ss.str("");
@@ -575,9 +575,9 @@ void Grid::printOutside(int id) const {
                 }
                 ss << endl;
             }
-            cout << "    [X, Y; Z > Lz]: " << tmp << endl;
+            oout << "    [X, Y; Z > Lz]: " << tmp << endl;
             if (tmp > CONST_EPS)
-                cout << ss.str() << endl;
+                oout << ss.str() << endl;
             
             //Left surface
             tmp = 0; ss.str("");
@@ -588,9 +588,9 @@ void Grid::printOutside(int id) const {
                 }
                 ss << endl;
             }
-            cout << "    [X, Z; Y < -Ly/2]: " << tmp << endl;
+            oout << "    [X, Z; Y < -Ly/2]: " << tmp << endl;
             if (tmp > CONST_EPS)
-                cout << ss.str() << endl;
+                oout << ss.str() << endl;
             
             //Right surface
             tmp = 0; ss.str("");
@@ -601,9 +601,9 @@ void Grid::printOutside(int id) const {
                 }
                 ss << endl;
             }
-            cout << "    [X, Z; Y > +Ly/2]: " << tmp << endl;
+            oout << "    [X, Z; Y > +Ly/2]: " << tmp << endl;
             if (tmp > CONST_EPS)
-                cout << ss.str() << endl;
+                oout << ss.str() << endl;
             
             
             //Bottom surface
@@ -615,9 +615,9 @@ void Grid::printOutside(int id) const {
                 }
                 ss << endl;
             }
-            cout << "    [Z, Y; X < -Lx/2]: " << tmp << endl;
+            oout << "    [Z, Y; X < -Lx/2]: " << tmp << endl;
             if (tmp > CONST_EPS)
-                cout << ss.str() << endl;
+                oout << ss.str() << endl;
             
             //Top surface
             tmp = 0; ss.str("");
@@ -628,26 +628,26 @@ void Grid::printOutside(int id) const {
                 }
                 ss << endl;
             }
-            cout << "    [Z, Y; X < +Lx/2]: " << tmp << endl;
+            oout << "    [Z, Y; X < +Lx/2]: " << tmp << endl;
             if (tmp > CONST_EPS)
-                cout << ss.str() << endl;
+                oout << ss.str() << endl;
             
             //Now the corners
             tmp = m.at(id).at(sub2ind(0, 0, 0)) + m.at(id).at(sub2ind(0, 0, nz+1))
                 + m.at(id).at(sub2ind(0, ny+1, 0)) + m.at(id).at(sub2ind(0, ny+1, nz+1))
                 + m.at(id).at(sub2ind(nx+1, 0, 0)) + m.at(id).at(sub2ind(nx+1, 0, nz+1))
                 + m.at(id).at(sub2ind(nx+1, ny+1, 0)) + m.at(id).at(sub2ind(nx+1, ny+1, nz+1));
-            cout << endl << "[-,-,-], [-,-,+], [-,+,-], [-,+,+], [+,-,-], [+,-,+], [+,+,-], [+,+,+]: " << tmp << endl;
+            oout << endl << "[-,-,-], [-,-,+], [-,+,-], [-,+,+], [+,-,-], [+,-,+], [+,+,-], [+,+,+]: " << tmp << endl;
             if (tmp > CONST_EPS) {
-                cout << scientific << setw(18) << m.at(id).at(sub2ind(0, 0, 0));
-                cout << scientific << setw(18) << m.at(id).at(sub2ind(0, 0, nz+1));
-                cout << scientific << setw(18) << m.at(id).at(sub2ind(0, ny+1, 0));
-                cout << scientific << setw(18) << m.at(id).at(sub2ind(0, ny+1, nz+1));
-                cout << scientific << setw(18) << m.at(id).at(sub2ind(nx+1, 0, 0));
-                cout << scientific << setw(18) << m.at(id).at(sub2ind(nx+1, 0, nz+1));
-                cout << scientific << setw(18) << m.at(id).at(sub2ind(nx+1, ny+1, 0));
-                cout << scientific << setw(18) << m.at(id).at(sub2ind(nx+1, ny+1, nz+1));
-                cout << endl;
+                oout << scientific << setw(18) << m.at(id).at(sub2ind(0, 0, 0));
+                oout << scientific << setw(18) << m.at(id).at(sub2ind(0, 0, nz+1));
+                oout << scientific << setw(18) << m.at(id).at(sub2ind(0, ny+1, 0));
+                oout << scientific << setw(18) << m.at(id).at(sub2ind(0, ny+1, nz+1));
+                oout << scientific << setw(18) << m.at(id).at(sub2ind(nx+1, 0, 0));
+                oout << scientific << setw(18) << m.at(id).at(sub2ind(nx+1, 0, nz+1));
+                oout << scientific << setw(18) << m.at(id).at(sub2ind(nx+1, ny+1, 0));
+                oout << scientific << setw(18) << m.at(id).at(sub2ind(nx+1, ny+1, nz+1));
+                oout << endl;
             }
             break;
         case CoordinateSystem::Cylindrical:
@@ -662,12 +662,12 @@ void Grid::printOutside(int id) const {
                 }
                 ss << endl;
             }
-            cout << "    [theta, phi; r > R]:  " << tmp << endl;
+            oout << "    [theta, phi; r > R]:  " << tmp << endl;
             if (tmp > CONST_EPS)
-                cout << ss.str() << endl;
+                oout << ss.str() << endl;
             break;
     }
-    cout << endl << endl;
+    oout << endl << endl;
 }
 
 long unsigned int Grid::ind1(const vec& x) const {

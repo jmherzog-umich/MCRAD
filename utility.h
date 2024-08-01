@@ -5,6 +5,7 @@
 #include <cstdint>
 #include <algorithm>
 #include <cctype>
+#include <fstream>
 #include <iostream>
 
 #define FP_FAST_FMA
@@ -29,6 +30,31 @@ bool isvec(const string& s) {
         if (x == ',' or x == ';')
             return true;
     return false;
+}
+
+string makefilename(const string& name, const string& ext, int id) {
+    string base = name.substr(0, name.find('.'));
+    return base + "." + to_string(id) + "." + ext;
+}
+
+string readfile(const string& name) {
+
+    //Allocate string and load file
+    string out;
+    ifstream file = ifstream(name);
+        
+    //If file is bad, return empty string
+    if (not file)
+        return out;
+    
+    //Allocate a buffer string to read line by line
+    string buf;
+    while (not file.eof()) {
+        getline(file, buf);
+        out.append(buf);
+        out.append("\n");
+    }
+    return out;
 }
 
 vector<string> splitcomma(const string& s) {

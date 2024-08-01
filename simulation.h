@@ -40,20 +40,22 @@ using namespace std;
 class Simulation {
     public:
         Simulation();
-        void load(const string& fname, const vector<string>& args);
+        void load(stringstream& settings);
         void setup();
         void run();
         void genBeam();
         void genFluor();
-        void exec(const vector<string>& args);
+        void readArgs(const vector<string>& args);
+        void exec();
+        void setid(int n);
         bool set(const string &key, const vector<string>& val);
         
         void emitPhoton(const vec& x, double W, double t0);
         
         void print();
-        void printstatus(int STEP) const;
-        void printstatusheader() const;
-        void printsettings() const;
+        void printstatus(int STEP);
+        void printstatusheader();
+        void printsettings();
         
         void write(string s) const;
         void writedb(ofstream& OF) const;
@@ -88,6 +90,8 @@ class Simulation {
         double dTf = 100;               //Time step for fluorescence
         double Fmin = 400;              //Minimum frequency for the simulation
         double Fmax = 1000;             //Maximum frequency for the simulation
+        
+        int id;                         //Integer ID for the specific process to keep track of simultaneous runs
         
         //Sim Flags
         SimFlags flags = (Simulation::SimFlags)3;
@@ -125,6 +129,13 @@ class Simulation {
         
         //Output settings
         string dbfile;
+        string basename;
+        bool outputfile;
+        
+        ostream oout;
+        
+        ofstream ofile;
+        streambuf* obuffer;
         
         //Other things to keep track of
         chrono::system_clock::time_point t0;
@@ -134,7 +145,7 @@ class Simulation {
         string STARTTIMESTR;
 };
 
-Simulation::Simulation() {
+Simulation::Simulation() : oout(NULL) {
     //Set default parameters
     n0=1.600; nx=1.600; nr=1.600;
     L=1e4; R=1e4; dT=1; dTf = 100;
@@ -144,6 +155,7 @@ Simulation::Simulation() {
     flags = (Simulation::SimFlags)135;
     printSteps = 0; storedFpaths = 0;
     tsim = 0; tfluor = 0; storepaths = 50; trackPhoton = 0;
+    id = 0; outputfile = false;
 }
 
 template<class T>
@@ -153,39 +165,49 @@ void remove(vector<T>& v, unsigned int i) {
     v.pop_back();
 }
 
+void Simulation::setid(int n) {
+    id = n;
+}
+
 void Simulation::print() {
     //Write output file
-    cout << "==================================================================" << endl;
-    cout << "Transmitted and reflected beams" << endl;
-    cout << "==================================================================" << endl;
-    cout << "Reflected beam intensity profile [photons]" << endl;
-    imgR.printGrid();
-    imgR.print();
+    oout << "==================================================================" << endl;
+    oout << "Transmitted and reflected beams" << endl;
+    oout << "==================================================================" << endl;
+    oout << "Reflected beam intensity profile [photons]" << endl;
+    imgR.printGrid(oout);
+    imgR.print(oout);
     
-    cout << "Transmitted beam intensity profile [photons]" << endl;
-    imgT.printGrid();
-    imgT.print();
+    oout << "Transmitted beam intensity profile [photons]" << endl;
+    imgT.printGrid(oout);
+    imgT.print(oout);
 
-    cout << "==================================================================" << endl;
-    cout << "Simulated image " << endl;
-    cout << "==================================================================" << endl;
-    cam.printGrid();
-    cam.print();
+    oout << "==================================================================" << endl;
+    oout << "Simulated image " << endl;
+    oout << "==================================================================" << endl;
+    cam.printGrid(oout);
+    cam.print(oout);
 
-    cout << "==================================================================" << endl;
-    cout << "Statistics" << endl;
-    cout << "==================================================================" << endl;
-    stats.print();
+    oout << "==================================================================" << endl;
+    oout << "Statistics" << endl;
+    oout << "==================================================================" << endl;
+    stats.print(oout);
     
     //Store path data
     if (storepaths) {
-        cerr << "Writing " << PATHS.size() << " paths to xyz file: " << RayPath::ofbasename + ".xyz" << endl;
-        ofstream FILE(RayPath::ofbasename + ".xyz");
+        string fname = makefilename(RayPath::ofbasename, "xyz", id);
+        cerr << "Writing " << PATHS.size() << " paths to xyz file: " << fname << endl;
+        ofstream FILE(fname);
         for (unsigned long int j = 0; j < PATHS.size(); j ++)
             PATHS.at(j).print(FILE);
         FILE.close();
     }
-}
+    
+    //Close file if needed
+    if (outputfile)
+        ofile.close();
+    
+} 
 
 void Simulation::genBeam() {
     //Alert the user
@@ -273,7 +295,7 @@ void Simulation::genFluor() {
     
 }
 
-void Simulation::printsettings() const {
+void Simulation::printsettings() {
     //Fresnel coefficients
     double n = medium.n();
     double Rspec = (n0-n)*(n0-n)/(n0+n)/(n0+n);
@@ -281,90 +303,90 @@ void Simulation::printsettings() const {
     double Tspec = 1.0 - Rspec;
     
     //Print some settings
-    cout << "==================================================================" << endl;
-    cout << "Settings [UNITS: um, ps, THz]" << endl;
-    cout << "==================================================================" << endl;
+    oout << "==================================================================" << endl;
+    oout << "Settings [UNITS: um, ps, THz]" << endl;
+    oout << "==================================================================" << endl;
         
-    cout << "Back Wall: " << (((int)flags & (int)SimFlags::BackWall) ? "True" : "False" ) << endl;
-    cout << "Front Wall: " << (((int)flags & (int)SimFlags::FrontWall) ? "True" : "False" ) << endl;
-    cout << "Radial Wall: " << (((int)flags & (int)SimFlags::RadialWall) ? "True" : "False" ) << endl;
-    cout << "Packet interference: " << (((int)flags & (int)SimFlags::Interference) ? "True" : "False" ) << endl;
-    cout << "Time-dependent: " << (((int)flags & (int)SimFlags::TimeResolved) ? "True" : "False") << endl;
-    cout << "Saturation: " << (((int)flags & (int)SimFlags::Saturation) ? "True" : "False" ) << endl;
-    cout << "Single-photon mode: " << (((int)flags & (int)SimFlags::SinglePhoton) ? "True" : "False" ) << endl;
-    cout << "Fluorescence generation: " << (((int)flags & (int)SimFlags::Fluorescence) ? "True" : "False" ) << endl;
+    oout << "Back Wall: " << (((int)flags & (int)SimFlags::BackWall) ? "True" : "False" ) << endl;
+    oout << "Front Wall: " << (((int)flags & (int)SimFlags::FrontWall) ? "True" : "False" ) << endl;
+    oout << "Radial Wall: " << (((int)flags & (int)SimFlags::RadialWall) ? "True" : "False" ) << endl;
+    oout << "Packet interference: " << (((int)flags & (int)SimFlags::Interference) ? "True" : "False" ) << endl;
+    oout << "Time-dependent: " << (((int)flags & (int)SimFlags::TimeResolved) ? "True" : "False") << endl;
+    oout << "Saturation: " << (((int)flags & (int)SimFlags::Saturation) ? "True" : "False" ) << endl;
+    oout << "Single-photon mode: " << (((int)flags & (int)SimFlags::SinglePhoton) ? "True" : "False" ) << endl;
+    oout << "Fluorescence generation: " << (((int)flags & (int)SimFlags::Fluorescence) ? "True" : "False" ) << endl;
     if ((int)flags & (int)SimFlags::Fluorescence)
-        cout << "Fluorescence-trapping: " << (((int)flags & (int)SimFlags::FluorescenceTrapping) ? "True" : "False") << endl;
-    cout << "Side wall geometry: " << (((int)flags & (int)SimFlags::Cartesian) ? "Cartesian" : "Cylindrical" ) << endl;
-    cout << "Periodic XY: " << (((int)flags & (int)SimFlags::PeriodicXY) ? "True" : "False" ) << endl;
+        oout << "Fluorescence-trapping: " << (((int)flags & (int)SimFlags::FluorescenceTrapping) ? "True" : "False") << endl;
+    oout << "Side wall geometry: " << (((int)flags & (int)SimFlags::Cartesian) ? "Cartesian" : "Cylindrical" ) << endl;
+    oout << "Periodic XY: " << (((int)flags & (int)SimFlags::PeriodicXY) ? "True" : "False" ) << endl;
     if (((int)flags & (int)SimFlags::PeriodicXY) && !((int)flags & (int)SimFlags::Cartesian))
-        cout << "   WARNING: PERIODIC RADIAL BC WITH CYLINDRICAL COORDINATES. TAKE CARE INTERPRETING RESULTS." << endl;
-    cout << "Periodic Z: " << (((int)flags & (int)SimFlags::PeriodicZ) ? "True" : "False" ) << endl;
-    cout << "Photon packets: " << N0 << endl;
-    cout << "Total photons: " << stats.PHI << endl;
-    cout << "Frequency range: " << Fmin << " - " << Fmax << " THz" << endl;
-    cout << "Simulation time-step: " << dT << " ps" << endl;
+        oout << "   WARNING: PERIODIC RADIAL BC WITH CYLINDRICAL COORDINATES. TAKE CARE INTERPRETING RESULTS." << endl;
+    oout << "Periodic Z: " << (((int)flags & (int)SimFlags::PeriodicZ) ? "True" : "False" ) << endl;
+    oout << "Photon packets: " << N0 << endl;
+    oout << "Total photons: " << stats.PHI << endl;
+    oout << "Frequency range: " << Fmin << " - " << Fmax << " THz" << endl;
+    oout << "Simulation time-step: " << dT << " ps" << endl;
     if (((int)flags & (int)SimFlags::TimeResolved) && ((int)flags & (int)SimFlags::Fluorescence))
-        cout << "Fluorescence time-step: " << dTf << " ps" << endl;
-    cout << "Front Refractive Index: " << n0 << endl;
-    cout << "Back Refractive Index: " << nx << endl;
-    cout << "Side Refractive Index: " << nr << endl;
+        oout << "Fluorescence time-step: " << dTf << " ps" << endl;
+    oout << "Front Refractive Index: " << n0 << endl;
+    oout << "Back Refractive Index: " << nx << endl;
+    oout << "Side Refractive Index: " << nr << endl;
     if (storepaths) {
-        cout << "Storing " << storepaths << " ray paths to file: " << RayPath::ofbasename << ".xyz" << endl;
+        oout << "Storing " << storepaths << " ray paths to file: " << RayPath::ofbasename << ".xyz" << endl;
         if ((int)flags & (int)SimFlags::Fluorescence)
-            cout << "Storing " << storepaths << " fluorescence ray paths to file: " << RayPath::ofbasename << ".xyz" << endl;
+            oout << "Storing " << storepaths << " fluorescence ray paths to file: " << RayPath::ofbasename << ".xyz" << endl;
     }
-    cout << "Theoretical max (static) step count for absorption: " << ceil(log(Wmin)/log(medium.albedo(beam.beamspec.peak())) + 1.0/Wm) << endl;
+    oout << "Theoretical max (static) step count for absorption: " << ceil(log(Wmin)/log(medium.albedo(beam.beamspec.peak())) + 1.0/Wm) << endl;
     if ((int)flags & (int)SimFlags::TimeResolved)
-        cout << "Theoretical max (dynamic) step count for absorption: " << ceil((ceil(log(Wmin)/log(medium.albedo())) + 1.0/Wm) / medium.we() / stats.dT) << endl;
-    cout << endl;
+        oout << "Theoretical max (dynamic) step count for absorption: " << ceil((ceil(log(Wmin)/log(medium.albedo())) + 1.0/Wm) / medium.we() / stats.dT) << endl;
+    oout << endl;
     
     //Fresnel coefficients
-    cout << "Fresnel coefficients:" << endl;
-    cout << "  R0  = " << Rspec << endl;
-    cout << "  Rx  = " << Rx << endl;
-    cout << "  T0  = " << Tspec << endl << endl;
+    oout << "Fresnel coefficients:" << endl;
+    oout << "  R0  = " << Rspec << endl;
+    oout << "  Rx  = " << Rx << endl;
+    oout << "  T0  = " << Tspec << endl << endl;
     
     //Print medium settings
-    cout << "==================================================================" << endl;
-    cout << "Medium properties" << endl;
-    cout << "==================================================================" << endl;
-    medium.print();
-    cout << "Peak incident frequency: " << beam.beamspec.peak() << " THz" << endl;
-    medium.print_at_f(beam.beamspec.peak());
-    cout << "Peak fluorescence frequency: " << medium.peak_v() << " THz" << endl;
-    medium.print_at_f(medium.peak_v());
+    oout << "==================================================================" << endl;
+    oout << "Medium properties" << endl;
+    oout << "==================================================================" << endl;
+    medium.print(oout);
+    oout << "Peak incident frequency: " << beam.beamspec.peak() << " THz" << endl;
+    medium.print_at_f(oout, beam.beamspec.peak());
+    oout << "Peak fluorescence frequency: " << medium.peak_v() << " THz" << endl;
+    medium.print_at_f(oout, medium.peak_v());
     
     //Print beam info
-    cout << "==================================================================" << endl;
-    cout << "Source properties" << endl;
-    cout << "==================================================================" << endl;
-    beam.print();
+    oout << "==================================================================" << endl;
+    oout << "Source properties" << endl;
+    oout << "==================================================================" << endl;
+    beam.print(oout);
         
     //Print camera info
-    cout << "==================================================================" << endl;
-    cout << "Camera properties" << endl;
-    cout << "==================================================================" << endl;
-    cam.printSetup();
+    oout << "==================================================================" << endl;
+    oout << "Camera properties" << endl;
+    oout << "==================================================================" << endl;
+    cam.printSetup(oout);
         
     //Define output arrays
-    cout << "==================================================================" << endl;
-    cout << "Output grid settings" << endl;
-    cout << "==================================================================" << endl;
-    grid.printGrid();
+    oout << "==================================================================" << endl;
+    oout << "Output grid settings" << endl;
+    oout << "==================================================================" << endl;
+    grid.printGrid(oout);
     
     //Print the initial condition
-    cout << "==================================================================" << endl;
-    cout << "Initial condition" << endl;
-    cout << "==================================================================" << endl;
-    cout << "Incident beam profile before specular reflection [photons]:" << endl;
-    imgIC.printGrid();
-    imgIC.print();
+    oout << "==================================================================" << endl;
+    oout << "Initial condition" << endl;
+    oout << "==================================================================" << endl;
+    oout << "Incident beam profile before specular reflection [photons]:" << endl;
+    imgIC.printGrid(oout);
+    imgIC.print(oout);
     
     //Warn the user
-    cout << "==================================================================" << endl;
-    cout << "Starting simulation" << endl;
-    cout << "==================================================================" << endl;
+    oout << "==================================================================" << endl;
+    oout << "Starting simulation" << endl;
+    oout << "==================================================================" << endl;
 }
 
 void Simulation::setup() {
@@ -374,6 +396,14 @@ void Simulation::setup() {
     medium.Fmin = Fmin;
     medium.Fmax = Fmax;
     Spectrum::setFreqLimits(Fmin, Fmax);
+    
+    //Create output stream
+    if (outputfile) {
+        ofile.open(makefilename(basename, "out", id));
+        obuffer = ofile.rdbuf();
+    } else
+        obuffer = cout.rdbuf();
+    oout.rdbuf(obuffer);
     
     //Create images and cameras
     imgIC = Image(10,10,2*beam.Rb/5, false);
@@ -434,7 +464,7 @@ void Simulation::setup() {
     
 }
 
-void Simulation::printstatusheader() const {
+void Simulation::printstatusheader() {
     cerr << "   Start time: " << STARTTIMESTR << "     " << N0 << " particles";
     cerr << "      Max steps: " << maxstep << endl;
     cerr << "-------------------------------------------------------------------------------" << endl;
@@ -442,7 +472,7 @@ void Simulation::printstatusheader() const {
     cerr << "-------------------------------------------------------------------------------" << endl;
 }
 
-void Simulation::printstatus(int STEP) const {
+void Simulation::printstatus(int STEP) {
     //Step and sim time
     chrono::duration<double> ELAPSED;
     cerr << setw(10) << STEP;
@@ -621,6 +651,10 @@ void Simulation::run() {
                         ds = ds2;
                 }
                 
+                //TODO: FOR EACH OF THE FOLLOWING CHECKS:
+                // reflect = grid.intersectCell(&ds,x,mu)
+                // so we can get grid logic out of here (to implement, e.g., spheres)
+                
                 //-If we have periodic Z axis, then ignore the walls, otherwise check for collisions
                 if (!((int)flags & (int)SimFlags::PeriodicZ)) {
                 
@@ -675,6 +709,9 @@ void Simulation::run() {
                 PHOTONS.at(i).x += PHOTONS.at(i).mu * ds / medium.ke(PHOTONS.at(i).v);
                 PHOTONS.at(i).t += ds / k / CONST_C * n;
                 
+                //TODO: FOR PERIODIC BCs
+                // PHOTON.at(i).x = grid.bound(PHOTON.at(i).x);
+                
                 //Enforce periodic boundaries if we have them
                 if ((int)flags & (int)SimFlags::PeriodicXY) {
                     if ((int)flags & (int)SimFlags::Cartesian) {
@@ -698,6 +735,12 @@ void Simulation::run() {
                     while ( PHOTONS.at(i).x.Z < 0 )
                         PHOTONS.at(i).x.Z += L;
                 }
+                
+                //TODO: FOR REFLECTION/TRANSMISSION, figure out what can be offloaded to grid
+                // grid.Transmit(PHOTON.at(i), transmit);
+                // Grid needs to have the n0, n, nx, nr values already
+                // Should be able to handle all geometry though (reflection/transmission coeffs, sin/cos angles)
+                // Will need to report both back here to get into stats
                 
                 //Look for transmission events (hitting back surface) from the current cell
                 if ( reflect == 1 ) {
@@ -920,28 +963,28 @@ void Simulation::run() {
         
         //Print the grids if requested
         if ((printSteps) and ((STEP % printSteps) == 0)) {
-            cout << "Step: ";
+            oout << "Step: ";
             if ((int)flags & (int)SimFlags::TimeResolved)
-                cout << tsim << "  ps" << endl;
+                oout << tsim << "  ps" << endl;
             else
-                cout << STEP << endl;
-            grid.print();
-            cout << "--------------------" << endl;
+                oout << STEP << endl;
+            grid.print(oout);
+            oout << "--------------------" << endl;
         }
     }
     
     //Print final grid only if we don't ask for steps
     if (!printSteps) {
-        cout << "Final state: ";
+        oout << "Final state: ";
         if ((int)flags & (int)SimFlags::TimeResolved)
-            cout << tsim << "  ps" << endl;
+            oout << tsim << "  ps" << endl;
         else
-            cout << STEP << endl;
-        grid.print(true);
+            oout << STEP << endl;
+        grid.print(oout, true);
     }
     
     //Report status
-    cout<<"Calculation complete in "<<STEP-1<<" steps ("<<maxstep<<" allowed)"<<endl<<endl;
+    oout<<"Calculation complete in "<<STEP-1<<" steps ("<<maxstep<<" allowed)"<<endl<<endl;
 }
 
 bool Simulation::set(const string &key, const vector<string>& val) {
@@ -989,6 +1032,10 @@ bool Simulation::set(const string &key, const vector<string>& val) {
         maxstep = stoul(val.at(0));
     else if (!key.compare("database-filename"))
         dbfile = val.at(0);
+    else if (!key.compare("base-filename")) {
+        basename = val.at(0);
+        outputfile = true;
+    }
     else if (!key.compare("print-steps"))
         printSteps = stoul(val.at(0));
     else if (!key.compare("track-photon"))
@@ -1098,18 +1145,15 @@ bool Simulation::set(const string &key, const vector<string>& val) {
     return true;
 }
 
-void Simulation::load(const string& fname, const vector<string>& args) {
+void Simulation::load(stringstream& settings) {
         //Allocate some memory and open the file
         string cmd, key, tmp;
         vector<string> vals;
         stringstream cmdstr;
-        ifstream ifile(fname);
         bool done;
         
         //Process line by line
-        while (!ifile.eof()) {
-            //Get the command
-            getline(ifile, cmd);
+        while (getline(settings,cmd)) {
             
             //Skip empty strings
             if (cmd.empty())
@@ -1125,23 +1169,8 @@ void Simulation::load(const string& fname, const vector<string>& args) {
             done = set(key, vals);
             
             //Commands to run the program
-            if (!done) {
-                if (!key.compare("run"))
-                    run();
-                else if (!key.compare("setup"))
-                    setup();
-                else if (!key.compare("generate-beam"))
-                    genBeam();
-                else if (!key.compare("print"))
-                    print();
-                else if (!key.compare("write"))
-                    write(vals.at(0));
-                else if (!key.compare("execute")) {
-                    exec(args);
-                    return; //Exit here
-                } else
-                    cerr << "Unknown input option: " << cmd << endl;
-            }
+            if (!done)
+                cerr << "Unknown input option: " << cmd << endl;
                 
             //Clear values
             key.clear();
@@ -1149,9 +1178,6 @@ void Simulation::load(const string& fname, const vector<string>& args) {
             vals.clear();
             cmdstr.clear();
         }
-        
-        //Close file
-        ifile.close();
         return;
 }
 
@@ -1175,7 +1201,7 @@ void Simulation::writedb(ofstream& OF) const {
 void Simulation::write(string s) const {
     //Check if string is empty
     if (s.empty()) {
-        s = dbfile;
+        s = makefilename(dbfile, "csv", id);
         if (s.empty())
             return;
     }
@@ -1209,7 +1235,7 @@ void Simulation::write(string s) const {
     OF.close();
 }
 
-void Simulation::exec(const vector<string>& args) {
+void Simulation::readArgs(const vector<string>& args) {
     //Loop through args and parse them
     string cmd;
     vector<string> arg;
@@ -1229,7 +1255,10 @@ void Simulation::exec(const vector<string>& args) {
         //Now interpret them
         set(cmd, arg);
     }
-    
+    return;
+}
+
+void Simulation::exec() {
     //Now generate beam, setup, etc., and run the program 
     genBeam();
     setup();

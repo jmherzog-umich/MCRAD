@@ -42,8 +42,8 @@ struct Medium {
     PhaseFunction phase;                //Phase function to use for calculation
     Spectrum xca, xcs, xf;              //Cross-section models for absorption and scattering
     
-    void print() const;
-    void print_at_f(double f) const;
+    void print(ostream& oout) const;
+    void print_at_f(ostream& oout, double f) const;
     void writedbheader(ofstream& OF) const;
     void writedb(ofstream& OF) const;
     
@@ -98,45 +98,45 @@ string _phasemodelname(Medium::PhaseFunction f) {
     }
 }
 
-void Medium::print_at_f(double f) const {
-    cout << "   Medium refractive index: " << n(f) << endl;
-    cout << "   Scattering anisotropy <cos theta>: " << g(f) << endl;
-    cout << "   Scattering cross-section: " << Ss(f) << " um2" << endl;
-    cout << "   Absorption cross-section: " << Sa(f) << " um2" << endl;
-    cout << "   Albedo: " << albedo(f) << endl;
+void Medium::print_at_f(ostream& oout, double f) const {
+    oout << "   Medium refractive index: " << n(f) << endl;
+    oout << "   Scattering anisotropy <cos theta>: " << g(f) << endl;
+    oout << "   Scattering cross-section: " << Ss(f) << " um2" << endl;
+    oout << "   Absorption cross-section: " << Sa(f) << " um2" << endl;
+    oout << "   Albedo: " << albedo(f) << endl;
     
-    //Print MFPs
-    cout << "   Scattering mean free path: " << ls(f) << " um" << endl;
-    cout << "   Scattering rate: " << ws(f) << " THz" << endl;
-    cout << "   Absorption mean free path: " << la(f) << " um" << endl;
-    cout << "   Absorption rate: " << wa(f) << " THz" << endl;
-    cout << "   Collision mean free path: " << le(f) << " um" << endl;
-    cout << "   Collision rate: " << we(f) << " THz" << endl << endl;
+    //print MFPs
+    oout << "   Scattering mean free path: " << ls(f) << " um" << endl;
+    oout << "   Scattering rate: " << ws(f) << " THz" << endl;
+    oout << "   Absorption mean free path: " << la(f) << " um" << endl;
+    oout << "   Absorption rate: " << wa(f) << " THz" << endl;
+    oout << "   Collision mean free path: " << le(f) << " um" << endl;
+    oout << "   Collision rate: " << we(f) << " THz" << endl << endl;
 }
 
-void Medium::print() const {
-    cout << "Medium density: " << dens() << " um-3" << endl;
-    cout << "Phase function: " << _phasemodelname(phase) << endl;
+void Medium::print(ostream& oout) const {
+    oout << "Medium density: " << dens() << " um-3" << endl;
+    oout << "Phase function: " << _phasemodelname(phase) << endl;
 
-    cout << "Absorption cross-section model: " << xca.name() << endl;
-    cout << "   Integrated cross-section: " << xca.norm()*_Sa << " um2-THz" << endl;
-    cout << "   " << (xca.peakLabel() ? "Peak" : "Specified") << " value: " << xca.max()*_Sa;
-    cout << " um2 at " << xca.peak() << " THz" << endl;
-    cout << "   Width: " << xca.width() << " THz" << endl;
+    oout << "Absorption cross-section model: " << xca.name() << endl;
+    oout << "   Integrated cross-section: " << xca.norm()*_Sa << " um2-THz" << endl;
+    oout << "   " << (xca.peakLabel() ? "Peak" : "Specified") << " value: " << xca.max()*_Sa;
+    oout << " um2 at " << xca.peak() << " THz" << endl;
+    oout << "   Width: " << xca.width() << " THz" << endl;
 
-    cout << "Scattering cross-section model: " << xcs.name() << endl;
-    cout << "   Integrated cross-section: " << xcs.norm()*_Ss << " um2-THz" << endl;
-    cout << "   " << (xcs.peakLabel() ? "Peak" : "Specified") << " value: " << xcs.max()*_Ss;
-    cout << " um2 at " << xcs.peak() << " THz" << endl;
-    cout << "   Width: " << xcs.width() << " THz" << endl;
+    oout << "Scattering cross-section model: " << xcs.name() << endl;
+    oout << "   Integrated cross-section: " << xcs.norm()*_Ss << " um2-THz" << endl;
+    oout << "   " << (xcs.peakLabel() ? "Peak" : "Specified") << " value: " << xcs.max()*_Ss;
+    oout << " um2 at " << xcs.peak() << " THz" << endl;
+    oout << "   Width: " << xcs.width() << " THz" << endl;
     
-    cout << "Fluorescence spectrum model: " << xf.name() << endl;
-    cout << "   Quantum yield: " << _FQY << endl;
-    cout << "   " << (xf.peakLabel() ? "Peak" : "Specified") << " value: " << xf.max()*_FQY/xf.norm();
-    cout << " THz-1 at " << xf.peak() << " THz" << endl;
-    cout << "   Width: " << xf.width() << " THz" << endl;
+    oout << "Fluorescence spectrum model: " << xf.name() << endl;
+    oout << "   Quantum yield: " << _FQY << endl;
+    oout << "   " << (xf.peakLabel() ? "Peak" : "Specified") << " value: " << xf.max()*_FQY/xf.norm();
+    oout << " THz-1 at " << xf.peak() << " THz" << endl;
+    oout << "   Width: " << xf.width() << " THz" << endl;
     
-    cout << endl;
+    oout << endl;
 }
 
 Medium::Medium(double Wmin, double Wmax) {

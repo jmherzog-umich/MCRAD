@@ -45,7 +45,7 @@ struct Beam {
     Spectrum beamspec;
 
     Beam();
-    void print() const;
+    void print(ostream& oout) const;
     
     bool set(const string& key, const vector<string>& val);
     
@@ -64,49 +64,49 @@ Beam::Beam() {
     Zb = 0; Tb = 0; Pb = 0; N0 = 0; E = 1e5;
 }
 
-void Beam::print() const {
+void Beam::print(ostream& oout) const {
     double Ab;
-    cout << "Beam profile: ";
+    oout << "Beam profile: ";
     switch (beamprofile) {
-        case BeamType::Uniform : cout << "Uniform (r = " << Rb << " um)" << endl; Ab = CONST_PI * Rb * Rb; break;
-        case BeamType::Gaussian : cout << "Gaussian (sigma = " << Rb << " um)" << endl; Ab = CONST_PI * Rb * Rb; break;
-        case BeamType::UniformEllipse : cout << "Elliptical Uniform (a = " << Rb << " um, b = " << Sb << " um)" << endl;  Ab = CONST_PI*Rb*Sb; break;
-        case BeamType::GaussianEllipse : cout << "Elliptical Gaussian (sigmax = " << Rb << " um, sigmay = " << Sb << " um)" << endl;  Ab = CONST_PI*Rb*Sb; break;
-        case BeamType::UniformAnnulus : cout << "Annular Uniform (ri = " << Sb << " um, ro = " << Rb << " um)" << endl; Ab = CONST_PI*(Rb*Rb-Sb*Sb); break;
-        case BeamType::GaussianAnnulus : cout << "Annular Gaussian (mu = " << Rb << " um, sigma = " << Sb << " um)" << endl; Ab = CONST_PI*(Rb*Rb-Sb*Sb); break;
-        default : cout << "Other" << endl; Ab = 0; break;
+        case BeamType::Uniform : oout << "Uniform (r = " << Rb << " um)" << endl; Ab = CONST_PI * Rb * Rb; break;
+        case BeamType::Gaussian : oout << "Gaussian (sigma = " << Rb << " um)" << endl; Ab = CONST_PI * Rb * Rb; break;
+        case BeamType::UniformEllipse : oout << "Elliptical Uniform (a = " << Rb << " um, b = " << Sb << " um)" << endl;  Ab = CONST_PI*Rb*Sb; break;
+        case BeamType::GaussianEllipse : oout << "Elliptical Gaussian (sigmax = " << Rb << " um, sigmay = " << Sb << " um)" << endl;  Ab = CONST_PI*Rb*Sb; break;
+        case BeamType::UniformAnnulus : oout << "Annular Uniform (ri = " << Sb << " um, ro = " << Rb << " um)" << endl; Ab = CONST_PI*(Rb*Rb-Sb*Sb); break;
+        case BeamType::GaussianAnnulus : oout << "Annular Gaussian (mu = " << Rb << " um, sigma = " << Sb << " um)" << endl; Ab = CONST_PI*(Rb*Rb-Sb*Sb); break;
+        default : oout << "Other" << endl; Ab = 0; break;
     }
     
-    cout << "Beam spread function: ";
+    oout << "Beam spread function: ";
     switch (spreadfxn) {
-        case BeamSpread::Collimated : cout << "Collimated" << endl; break;
-        case BeamSpread::Gaussian : cout << "Gaussian (sigma = " << Pb << ")" << endl; break;
-        case BeamSpread::Lambertian : cout << "Lambertian [0, " << Pb << ")" << endl; break;
-        case BeamSpread::Isotropic : cout << "Isotropic [0, " << Pb << ")" << endl; break;
-        default: cout << "Other" << endl; break;
+        case BeamSpread::Collimated : oout << "Collimated" << endl; break;
+        case BeamSpread::Gaussian : oout << "Gaussian (sigma = " << Pb << ")" << endl; break;
+        case BeamSpread::Lambertian : oout << "Lambertian [0, " << Pb << ")" << endl; break;
+        case BeamSpread::Isotropic : oout << "Isotropic [0, " << Pb << ")" << endl; break;
+        default: oout << "Other" << endl; break;
     }
     
-    cout << "Beam temporal profile: ";
+    oout << "Beam temporal profile: ";
     switch (beamdur) {
-        case BeamDuration::Uniform : cout << "Uniform (" << Tb << " ps)" << endl; break;
-        case BeamDuration::Gaussian : cout << "Gaussian (sigma = " << Tb << " ps)" << endl; break;
-        case BeamDuration::Cauchy : cout << "Gaussian (gamma = " << Tb << " ps)" << endl; break;
-        default: cout << "Other" << endl; break;
+        case BeamDuration::Uniform : oout << "Uniform (" << Tb << " ps)" << endl; break;
+        case BeamDuration::Gaussian : oout << "Gaussian (sigma = " << Tb << " ps)" << endl; break;
+        case BeamDuration::Cauchy : oout << "Gaussian (gamma = " << Tb << " ps)" << endl; break;
+        default: oout << "Other" << endl; break;
     }
     
-    cout << "Beam frequency spectrum: ";
-    cout << beamspec.name() << endl << "   ";
-    cout << beamspec.paramstring() << endl;
+    oout << "Beam frequency spectrum: ";
+    oout << beamspec.name() << endl << "   ";
+    oout << beamspec.paramstring() << endl;
     
-    cout << "Focus at depth: " << ((Zb > 0) ? Zb : INFINITY) << ((Zb > 0) ? " um" : "") << endl;
-    cout << "Incident sin(theta): " << sin0 << endl;
-    cout << "Photons per packet: " << E << endl;
-    cout << "Total photons: " << E * N0 << endl;
+    oout << "Focus at depth: " << ((Zb > 0) ? Zb : INFINITY) << ((Zb > 0) ? " um" : "") << endl;
+    oout << "Incident sin(theta): " << sin0 << endl;
+    oout << "Photons per packet: " << E << endl;
+    oout << "Total photons: " << E * N0 << endl;
     if (Ab > 0)
-        cout << "Average fluence: " << E * N0 / Ab << " photons/um2     ~" << E * N0 * CONST_HBAR * beamspec.peak() / Ab * 1e8 << " J/cm2" << endl;
+        oout << "Average fluence: " << E * N0 / Ab << " photons/um2     ~" << E * N0 * CONST_HBAR * beamspec.peak() / Ab * 1e8 << " J/cm2" << endl;
     if ((Ab > 0) and (Tb > 0))
-        cout << "Average fluence rate: " << E * N0 / Ab / Tb << " photons/um2/ps     ~" << E * N0 * CONST_HBAR * beamspec.peak() / Ab / Tb * 1e20 << " W/cm2" << endl;
-    cout << endl;
+        oout << "Average fluence rate: " << E * N0 / Ab / Tb << " photons/um2/ps     ~" << E * N0 * CONST_HBAR * beamspec.peak() / Ab / Tb * 1e20 << " W/cm2" << endl;
+    oout << endl;
 
 }
 

@@ -28,8 +28,8 @@ struct Image {
     Image(int n, double Lpx, bool interference = false);
     Image(int nx, int ny, double Lpx, bool interference = false);
     
-    void print() const;
-    void printGrid() const;
+    void print(ostream& oout) const;
+    void printGrid(ostream& oout) const;
 };
 
 void Image::image(double x, double y, double f, double phase) {
@@ -71,22 +71,22 @@ Image::Image(int nx, int ny, double Lpx, bool interference) {
     clear();
 }
 
-void Image::print() const {
+void Image::print(ostream& oout) const {
     for (int i = 0; i < 2*ny+1; i ++) {
         for (int j = 0; j < 2*nx + 1; j ++)
-            cout << scientific << setw(18) << I.at((2*nx+1)*i + j);
-        cout << endl;
+            oout << scientific << setw(18) << I.at((2*nx+1)*i + j);
+        oout << endl;
     }
-    cout << endl;
+    oout << endl;
 }
 
-void Image::printGrid() const {
-    cout << "Image domain (W,H):   " << (2*nx+1)*Lpx << " x " << (2*ny+1)*Lpx << " um";
-    cout << endl << "  X:     ";
-    for (int i = -nx; i <= nx; i ++) cout << scientific << setw(18) << i*Lpx;
-    cout << endl << "  Y:     ";
-    for (int i = -ny; i <= ny; i ++) cout << scientific << setw(18) << i*Lpx;
-    cout << endl << endl;
+void Image::printGrid(ostream& oout) const {
+    oout << "Image domain (W,H):   " << (2*nx+1)*Lpx << " x " << (2*ny+1)*Lpx << " um";
+    oout << endl << "  X:     ";
+    for (int i = -nx; i <= nx; i ++) oout << scientific << setw(18) << i*Lpx;
+    oout << endl << "  Y:     ";
+    for (int i = -ny; i <= ny; i ++) oout << scientific << setw(18) << i*Lpx;
+    oout << endl << endl;
 }
 
 #endif

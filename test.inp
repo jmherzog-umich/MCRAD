@@ -32,6 +32,6 @@ enable-fluorescence-trapping 0
 beam-photons-per-packet 10000
 beam-radius-cutoff 5000
 beam-profile 1
-database-filename test.csv
+database-filename test
+base-filename test
 export-paths 100 test
-execute
