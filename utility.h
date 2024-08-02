@@ -37,6 +37,12 @@ string makefilename(const string& name, const string& ext, int id) {
     return base + "." + to_string(id) + "." + ext;
 }
 
+void writeheader(ostream& oout, string label) {
+    oout << "==================================================================" << endl;
+    oout << label << endl;
+    oout << "==================================================================" << endl;
+}
+
 string readfile(const string& name) {
 
     //Allocate string and load file

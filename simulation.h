@@ -171,26 +171,19 @@ void Simulation::setid(int n) {
 
 void Simulation::print() {
     //Write output file
-    oout << "==================================================================" << endl;
-    oout << "Transmitted and reflected beams" << endl;
-    oout << "==================================================================" << endl;
-    oout << "Reflected beam intensity profile [photons]" << endl;
+    writeheader(oout, "Reflected beam intensity profile [photons]");
     imgR.printGrid(oout);
     imgR.print(oout);
     
-    oout << "Transmitted beam intensity profile [photons]" << endl;
+    writeheader(oout, "Transmitted beam intensity profile [photons]");
     imgT.printGrid(oout);
     imgT.print(oout);
 
-    oout << "==================================================================" << endl;
-    oout << "Simulated image " << endl;
-    oout << "==================================================================" << endl;
+    writeheader(oout, "Simulated image");
     cam.printGrid(oout);
     cam.print(oout);
 
-    oout << "==================================================================" << endl;
-    oout << "Statistics" << endl;
-    oout << "==================================================================" << endl;
+    writeheader(oout, "Statistics");
     stats.print(oout);
     
     //Store path data
@@ -303,10 +296,7 @@ void Simulation::printsettings() {
     double Tspec = 1.0 - Rspec;
     
     //Print some settings
-    oout << "==================================================================" << endl;
-    oout << "Settings [UNITS: um, ps, THz]" << endl;
-    oout << "==================================================================" << endl;
-        
+    writeheader(oout, "Settings [UNITS: um, ps, THz]");
     oout << "Back Wall: " << (((int)flags & (int)SimFlags::BackWall) ? "True" : "False" ) << endl;
     oout << "Front Wall: " << (((int)flags & (int)SimFlags::FrontWall) ? "True" : "False" ) << endl;
     oout << "Radial Wall: " << (((int)flags & (int)SimFlags::RadialWall) ? "True" : "False" ) << endl;
@@ -348,9 +338,7 @@ void Simulation::printsettings() {
     oout << "  T0  = " << Tspec << endl << endl;
     
     //Print medium settings
-    oout << "==================================================================" << endl;
-    oout << "Medium properties" << endl;
-    oout << "==================================================================" << endl;
+    writeheader(oout, "Medium properties");
     medium.print(oout);
     oout << "Peak incident frequency: " << beam.beamspec.peak() << " THz" << endl;
     medium.print_at_f(oout, beam.beamspec.peak());
@@ -358,35 +346,25 @@ void Simulation::printsettings() {
     medium.print_at_f(oout, medium.peak_v());
     
     //Print beam info
-    oout << "==================================================================" << endl;
-    oout << "Source properties" << endl;
-    oout << "==================================================================" << endl;
+    writeheader(oout, "Source properties");
     beam.print(oout);
         
     //Print camera info
-    oout << "==================================================================" << endl;
-    oout << "Camera properties" << endl;
-    oout << "==================================================================" << endl;
+    writeheader(oout, "Camera properties");
     cam.printSetup(oout);
         
     //Define output arrays
-    oout << "==================================================================" << endl;
-    oout << "Output grid settings" << endl;
-    oout << "==================================================================" << endl;
+    writeheader(oout, "Output grid settings");
     grid.printGrid(oout);
     
     //Print the initial condition
-    oout << "==================================================================" << endl;
-    oout << "Initial condition" << endl;
-    oout << "==================================================================" << endl;
+    writeheader(oout, "Initial condition");
     oout << "Incident beam profile before specular reflection [photons]:" << endl;
     imgIC.printGrid(oout);
     imgIC.print(oout);
     
     //Warn the user
-    oout << "==================================================================" << endl;
-    oout << "Starting simulation" << endl;
-    oout << "==================================================================" << endl;
+    writeheader(oout, "Starting simulation");
 }
 
 void Simulation::setup() {

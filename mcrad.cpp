@@ -1,7 +1,3 @@
-#if _MPI
-#include <mpi.h>
-#endif
-
 #include <vector>
 #include <cmath>
 #include <string>
@@ -18,6 +14,10 @@
 #include "stats.h"
 #include "simulation.h"
 #include "utility.h"
+
+#if _MPI
+#include <mpi.h>
+#endif
 
 #if _DEBUG
 #include <fenv.h> 
@@ -66,7 +66,8 @@ int main(int argc, char** argv) {
     
     //Check if we have an input file and process any other arguments in main process
     if (pRank == 0) {
-        args = readfile(argv[1]);
+        if (argc > 0)
+            args = readfile(argv[1]);
         for (int i = 2; i < argc; i ++) {
             inputs.append(argv[i]);
             inputs.append("\n");
