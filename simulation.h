@@ -10,6 +10,7 @@
 #include <ctime>
 #include <iomanip>
 #include <chrono>
+#include <memory>
 
 #include "stats.h"
 #include "vec.h"
@@ -22,6 +23,10 @@
 #include "image.h"
 #include "camera.h"
 #include "raypath.h"
+
+#include "modules/cylgrid.h"
+#include "modules/rectgrid.h"
+#include "modules/sphgrid.h"
 
 #ifndef _SIMINFO_H_
 #define _SIMINFO_H_
@@ -99,7 +104,7 @@ class Simulation {
         //Define medium, beam, and grids
         Medium medium;
         Beam beam;
-        Grid grid;
+        unique_ptr<Grid> grid;
         Stats stats;
         Image imgIC, imgR, imgT;
         Camera cam;
@@ -254,19 +259,19 @@ void Simulation::genFluor() {
         ff = 0;
     
     //Iterate through grid and generate photons
-    for (auto it = grid.begin(); !it.end(); it ++) {
+    for (auto it = grid->begin(); !it.end(); it ++) {
         //Cache index
         ii = it.index();
         
         //Figure out how many particles decay at this time step
-        np = grid.at(4, ii) * (1.0 - ff);
+        np = grid->at(4, ii) * (1.0 - ff);
         
         //See if this cell is OK
         if (np < Emin)
             continue;
         
         //Subtract weight from grid
-        grid.at(4, ii) *= ff;
+        grid->at(4, ii) *= ff;
             
         //Figure out how many packets we CAN generate, and weight per packet
         nf = 1 + (int) (np / beam.E);
@@ -276,7 +281,7 @@ void Simulation::genFluor() {
         for (int i = 0; i < nf; i ++) {
             
             //Calculate new position, direction, etc.
-            x = grid.rand(ii);
+            x = grid->rand(ii);
             emitPhoton(x, wp, tsim);
         }
     }
@@ -355,7 +360,7 @@ void Simulation::printsettings() {
         
     //Define output arrays
     writeheader(oout, "Output grid settings");
-    grid.printGrid(oout);
+    grid->printGrid(oout);
     
     //Print the initial condition
     writeheader(oout, "Initial condition");
@@ -391,17 +396,17 @@ void Simulation::setup() {
     
     //Setup grid
     if ((int)flags & (int)SimFlags::Cartesian)
-        grid = Grid(2*R, 2*R, L, Rres, 1, Zres);
+        grid = make_unique<RectGrid>(2*R, 2*R, L, Rres, 1, Zres);
     else
-        grid = Grid(R, L, Rres, 1, Zres);
-    grid.newval("Absorption");
-    grid.newval("Incident");
+        grid = make_unique<CylGrid>(R, L, Rres, 1, Zres);
+    grid->newval("Absorption");
+    grid->newval("Incident");
     if ((int)flags & (int)SimFlags::Fluorescence) {
-        grid.newval("Reabsorption");
-        grid.newval("IncidentEmission");
-        grid.newval("ExcitedState");
+        grid->newval("Reabsorption");
+        grid->newval("IncidentEmission");
+        grid->newval("ExcitedState");
     }
-    grid.clear();
+    grid->clear();
     
     //Setup images and cameras
     imgIC.clear();
@@ -475,9 +480,9 @@ void Simulation::printstatus(int STEP) {
     else
         cerr << "          ";
     if ((int)flags & (int)SimFlags::Fluorescence)
-        cerr << " " << setw(10) << scientific << setprecision(3) << grid.sum(4);
+        cerr << " " << setw(10) << scientific << setprecision(3) << grid->sum(4);
     else
-        cerr << " " << setw(10) << scientific << setprecision(3) << grid.sum(0);
+        cerr << " " << setw(10) << scientific << setprecision(3) << grid->sum(0);
     
     //And finally new line
     cerr << endl;
@@ -549,9 +554,9 @@ void Simulation::run() {
                 if (PHOTONS.at(i).S <= CONST_EPS) {
                     
                     //Calculate grid values
-                    ii = grid.ind1(PHOTONS.at(i).x);
-                    jj = grid.ind2(PHOTONS.at(i).x);
-                    kk = grid.ind3(PHOTONS.at(i).x);
+                    ii = grid->ind1(PHOTONS.at(i).x);
+                    jj = grid->ind2(PHOTONS.at(i).x);
+                    kk = grid->ind3(PHOTONS.at(i).x);
                     
                     //Decide if we're treating this as a packet or single-photon
                     if ((int)flags & (int)SimFlags::SinglePhoton) {
@@ -559,13 +564,13 @@ void Simulation::run() {
                         eps = roll();
                         if (eps < ka/k) { //Absorb
                             //Calculate stats
-                            grid.at((PHOTONS.at(i).isFluorescence()?2:0), ii,jj,kk) += PHOTONS.at(i).W;
+                            grid->at((PHOTONS.at(i).isFluorescence()?2:0), ii,jj,kk) += PHOTONS.at(i).W;
                             stats.absorb(PHOTONS.at(i), PHOTONS.at(i).W);
                             
                             //Generate fluorescence photons
                             if ((int)flags & (int)SimFlags::Fluorescence)
                                 if (((int)flags & (int)SimFlags::FluorescenceTrapping) || (!PHOTONS.at(i).isFluorescence())){
-                                    grid.at(4, ii,jj,kk) += PHOTONS.at(i).W;
+                                    grid->at(4, ii,jj,kk) += PHOTONS.at(i).W;
                                     emitPhoton(PHOTONS.at(i).x, PHOTONS.at(i).W, tsim + medium.emit_tau(logroll()));
                                 }
                             
@@ -575,18 +580,18 @@ void Simulation::run() {
                             break;
                             
                         } else { //Scatter
-                            grid.at((PHOTONS.at(i).isFluorescence()?3:1), ii,jj,kk) += PHOTONS.at(i).W;
+                            grid->at((PHOTONS.at(i).isFluorescence()?3:1), ii,jj,kk) += PHOTONS.at(i).W;
                             stats.scatter(PHOTONS.at(i), PHOTONS.at(i).W);
                             PHOTONS.at(i).Scatter(roll(), roll(), medium);
                             PHOTONS.at(i).S = logroll();
                         }
                     } else {
                         //Update grids
-                        grid.at((PHOTONS.at(i).isFluorescence()?2:0), ii,jj,kk) += PHOTONS.at(i).W * ka/k;
+                        grid->at((PHOTONS.at(i).isFluorescence()?2:0), ii,jj,kk) += PHOTONS.at(i).W * ka/k;
                         if ((int)flags & (int)SimFlags::Fluorescence)
                             if (((int)flags & (int)SimFlags::FluorescenceTrapping) || (!PHOTONS.at(i).isFluorescence()))
-                                grid.at(4, ii,jj,kk) += PHOTONS.at(i).W * ka/k;
-                        grid.at((PHOTONS.at(i).isFluorescence()?3:1), ii,jj,kk) += PHOTONS.at(i).W;
+                                grid->at(4, ii,jj,kk) += PHOTONS.at(i).W * ka/k;
+                        grid->at((PHOTONS.at(i).isFluorescence()?3:1), ii,jj,kk) += PHOTONS.at(i).W;
                     
                         //Update stats
                         stats.scatter(PHOTONS.at(i), PHOTONS.at(i).W);
@@ -603,11 +608,11 @@ void Simulation::run() {
                 if ((int)flags & (int)SimFlags::Saturation) {
                     //E = photons absorbed/volume, dens = molecules/volume, E/dens = photons absorbed/molecule
                     if (PHOTONS.at(i).isFluorescence())
-                        Fabs = grid.norm(2, PHOTONS.at(i).x) / medium.dens();
+                        Fabs = grid->norm(2, PHOTONS.at(i).x) / medium.dens();
                     else if ((int)flags & (int)SimFlags::Fluorescence)
-                        Fabs = grid.norm(4, PHOTONS.at(i).x) / medium.dens();
+                        Fabs = grid->norm(4, PHOTONS.at(i).x) / medium.dens();
                     else
-                        Fabs = grid.norm(0, PHOTONS.at(i).x) / medium.dens();
+                        Fabs = grid->norm(0, PHOTONS.at(i).x) / medium.dens();
                     if (Fabs > 0)
                         ka = ka0 / Fabs * (1.0 - exp(-Fabs));
                     else
@@ -624,13 +629,13 @@ void Simulation::run() {
                 // EPS to ensure that the new position will resolve to the
                 // correct cell.
                 if ((int)flags & (int)SimFlags::Saturation) {
-                    ds2 = grid.intersect(PHOTONS.at(i).x, PHOTONS.at(i).mu);
+                    ds2 = grid->intersect(PHOTONS.at(i).x, PHOTONS.at(i).mu);
                     if (ds2 <= ds and ds2 > 0)
                         ds = ds2;
                 }
                 
                 //TODO: FOR EACH OF THE FOLLOWING CHECKS:
-                // reflect = grid.intersectCell(&ds,x,mu)
+                // reflect = grid->intersectShell(&ds,x,mu)
                 // so we can get grid logic out of here (to implement, e.g., spheres)
                 
                 //-If we have periodic Z axis, then ignore the walls, otherwise check for collisions
@@ -688,7 +693,7 @@ void Simulation::run() {
                 PHOTONS.at(i).t += ds / k / CONST_C * n;
                 
                 //TODO: FOR PERIODIC BCs
-                // PHOTON.at(i).x = grid.bound(PHOTON.at(i).x);
+                // PHOTON.at(i).x = grid->bound(PHOTON.at(i).x);
                 
                 //Enforce periodic boundaries if we have them
                 if ((int)flags & (int)SimFlags::PeriodicXY) {
@@ -715,7 +720,7 @@ void Simulation::run() {
                 }
                 
                 //TODO: FOR REFLECTION/TRANSMISSION, figure out what can be offloaded to grid
-                // grid.Transmit(PHOTON.at(i), transmit);
+                // grid->Transmit(PHOTON.at(i), transmit);
                 // Grid needs to have the n0, n, nx, nr values already
                 // Should be able to handle all geometry though (reflection/transmission coeffs, sin/cos angles)
                 // Will need to report both back here to get into stats
@@ -916,7 +921,7 @@ void Simulation::run() {
                 else {
                     
                     //Exit if grid is empty
-                    if (grid.less(4, Emin))
+                    if (grid->less(4, Emin))
                         END = true;
                     //Otherwise increment by the fluorescence time
                     else
@@ -946,7 +951,7 @@ void Simulation::run() {
                 oout << tsim << "  ps" << endl;
             else
                 oout << STEP << endl;
-            grid.print(oout);
+            grid->print(oout);
             oout << "--------------------" << endl;
         }
     }
@@ -958,7 +963,7 @@ void Simulation::run() {
             oout << tsim << "  ps" << endl;
         else
             oout << STEP << endl;
-        grid.print(oout, true);
+        grid->print(oout, true);
     }
     
     //Report status
