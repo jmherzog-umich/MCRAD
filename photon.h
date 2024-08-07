@@ -25,7 +25,10 @@ using namespace std;
 struct Photon {
     
     public:
-    
+        
+        //Static members
+        static double Wm;
+        
         enum struct PhotonFlags {
             isBallistic      = 0b00000001,      //Whether the photon has collided yet
             flippedPhase     = 0b00000010,      //Whether the phase should be flipped because of reflection from a higher index medium
@@ -64,10 +67,10 @@ struct Photon {
         
         void flipPhase();
         
+        void roulette();
+        
         double phi() const;
         double muR() const;
-        double intersectR(double R) const;
-        double intersectXY(double R, bool& xy) const;
         bool operator<(const Photon& rhs) const;
         bool operator<(double rhs) const;
         Photon& operator=(const Photon& rhs);
@@ -161,67 +164,6 @@ double Photon::muR() const {
     return mu.dot(xx / xx.norm());
 }
 
-double Photon::intersectXY(double R, bool& xy) const {
-    //Allocate variables
-    double sx, sy;
-    
-    //X direction
-    if (abs(mu.X) < CONST_EPS)
-        sx = -1;
-    else if (mu.X > 0)
-        sx = (R-x.X)/mu.X;
-    else
-        sx = (-R-x.X)/mu.X;
-    
-    //Y direction
-    if (abs(mu.Y) < CONST_EPS)
-        sy = -1;
-    else if (mu.Y > 0)
-        sy = (R-x.Y)/mu.Y;
-    else
-        sy = (-R-x.Y)/mu.Y;
-        
-    //Report the smallest value greater than zero
-    if ((sx > 0) and (sy > 0))
-        if (sx < sy)
-            xy = true;
-        else
-            xy = false;
-    else if (sx > 0)
-        xy = true;
-    else if (sy > 0)
-        xy = false;
-    else
-        xy = false;
-    if (xy)
-        return sx;
-    else
-        return sy;
-}
-
-double Photon::intersectR(double R) const {
-    //Some edge cases
-    if (abs(mu.r2()) < CONST_EPS)
-        return -1;
-
-    //Some preliminary variables
-    double a = mu.X*mu.X + mu.Y*mu.Y;
-    double b = (mu.X*x.X + mu.Y*x.Y)/a;
-    double c = (x.r2() - R*R)/a;
-    if (c/a > b*b)
-        return -1;
-            
-    //Calculate the roots
-    double r1 = -sqrt(b*b - c) - b;
-    double r2 = sqrt(b*b - c) - b;
-    
-    //If r1 is negative, return r2 regardless; or return r2 if its smaller than r1
-    if ((r1 < 0) or (r2 < r1))
-        return r2;
-    else
-        return r1;
-}
-
 bool Photon::operator<(const Photon& rhs) const {
     return this->t < rhs.t;
 }
@@ -276,5 +218,16 @@ void Photon::flipPhase() {
 void Photon::clearRayPath() {
     pth = nullptr;
 }
+
+void Photon::roulette() {
+    double eps = roll();
+    if (eps <= Photon::Wm)
+        W /= Photon::Wm;
+    else {
+        W = 0;
+    }
+}
+
+double Photon::Wm = 0.1;
 
 #endif

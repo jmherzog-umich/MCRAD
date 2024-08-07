@@ -259,6 +259,42 @@ struct CylGrid : public Grid {
         this->nz = (nz > 0) ? nz : nr;
         Ly = 2.0*CONST_PI/(double)ny;
     }
+    
+    virtual void collideSide(const vec& x, const vec& mu, double& ds, int& reflect) const {
+        //Some edge cases
+        if (abs(mu.r2()) <= 0)
+            return;
+
+        //Some preliminary variables
+        double a = mu.X*mu.X + mu.Y*mu.Y;
+        double b = (mu.X*x.X + mu.Y*x.Y)/a;
+        double c = (x.r2() - Lx*Lx)/a;
+        if (c/a > b*b)
+            return;
+                
+        //Calculate the roots
+        double r1 = -sqrt(b*b - c) - b;
+        double r2 = sqrt(b*b - c) - b;
+        
+        //Check the two intersections
+        if (r1 < ds and r1 > 0) {
+            reflect = 3;
+            ds = r1;
+        }
+        if (r2 < ds and r2 > 0) {
+            reflect = 3;
+            ds = r2;
+        }
+    }
+    
+    virtual void boundXY(vec& x) const {
+        if (x.r2() < Lx*Lx)
+            return;
+        vec u(x.X, x.Y, 0);
+        u = u / u.norm();
+        while ( x.r2() > Lx*Lx )
+            x = x - u * 2 * Lx;
+    }
 };
 
 #endif

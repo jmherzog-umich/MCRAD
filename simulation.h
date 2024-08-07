@@ -111,7 +111,6 @@ class Simulation {
         
         //Convergence and other settings
         double Wmin = 1e-10;            //Start terminating packets if they get this small
-        double Wm = 0.1;                //Weighting for Roulette termination procedure
         unsigned int maxstep = 5e6;     //Maximum number of steps before terminating program
         
         //Stats settings
@@ -155,7 +154,7 @@ Simulation::Simulation() : oout(NULL) {
     n0=1.600; nx=1.600; nr=1.600;
     L=1e4; R=1e4; dT=1; dTf = 100;
     N0 = 1e6; maxstep = 5e6;
-    Wmin = 1e-10; Wm = 0.1;
+    Wmin = 1e-10;
     Zres = 20; Rres = 20; Tres = 20; THres = 10; momentlvl = 4;
     flags = (Simulation::SimFlags)135;
     printSteps = 0; storedFpaths = 0;
@@ -331,9 +330,9 @@ void Simulation::printsettings() {
         if ((int)flags & (int)SimFlags::Fluorescence)
             oout << "Storing " << storepaths << " fluorescence ray paths to file: " << RayPath::ofbasename << ".xyz" << endl;
     }
-    oout << "Theoretical max (static) step count for absorption: " << ceil(log(Wmin)/log(medium.albedo(beam.beamspec.peak())) + 1.0/Wm) << endl;
+    oout << "Theoretical max (static) step count for absorption: " << ceil(log(Wmin)/log(medium.albedo(beam.beamspec.peak())) + 1.0/Photon::Wm) << endl;
     if ((int)flags & (int)SimFlags::TimeResolved)
-        oout << "Theoretical max (dynamic) step count for absorption: " << ceil((ceil(log(Wmin)/log(medium.albedo())) + 1.0/Wm) / medium.we() / stats.dT) << endl;
+        oout << "Theoretical max (dynamic) step count for absorption: " << ceil((ceil(log(Wmin)/log(medium.albedo())) + 1.0/Photon::Wm) / medium.we() / stats.dT) << endl;
     oout << endl;
     
     //Fresnel coefficients
@@ -498,7 +497,7 @@ void Simulation::run() {
     //Initialize a whole lot of temporary variables
     double eps, ds, ds2, ka, ka0, ks, k, tempR, Fabs, m, c, sint;
     unsigned long int ii,jj,kk;
-    bool xy = false, done = false, END=false;
+    bool done = false, END=false;
     int reflect;
     vec norm, u;
     Photon pt;
@@ -623,64 +622,33 @@ void Simulation::run() {
                 //Calculate the distance to the next interface (step through
                 // possible one and keep the shortest distance)
                 //-If no obstruction, we just pass freely the whole distance (reflect = 0)
-                ds = PHOTONS.at(i).S; ds2 = PHOTONS.at(i).S; reflect = 0;
-                    
-                //-Calculate distances to adjacent points (but increment by 
-                // EPS to ensure that the new position will resolve to the
-                // correct cell.
-                if ((int)flags & (int)SimFlags::Saturation) {
-                    ds2 = grid->intersect(PHOTONS.at(i).x, PHOTONS.at(i).mu);
-                    if (ds2 <= ds and ds2 > 0)
-                        ds = ds2;
-                }
+                ds = PHOTONS.at(i).S/k;
+                ds2 = ds;
+                reflect = 0;
                 
-                //TODO: FOR EACH OF THE FOLLOWING CHECKS:
-                // reflect = grid->intersectShell(&ds,x,mu)
-                // so we can get grid logic out of here (to implement, e.g., spheres)
-                
-                //-If we have periodic Z axis, then ignore the walls, otherwise check for collisions
+                //-Check adjacent cells if we need ot
+                if ((int)flags & (int)SimFlags::Saturation)
+                  grid->collideCell(PHOTONS.at(i).x, PHOTONS.at(i).mu, ds, reflect);
+                  
+                //-Check front/back walls
                 if (!((int)flags & (int)SimFlags::PeriodicZ)) {
-                
-                    //--Calculate distance to back wall
-                    if ( ((int)flags & (int)SimFlags::BackWall) and (PHOTONS.at(i).mu.Z > 0)) {
-                        //If the back wall is closer than the current ds value
-                        ds2 = (L - PHOTONS.at(i).x.Z)/PHOTONS.at(i).mu.Z * k;
-                        if (ds2 <= ds and ds2 >= 0) {
-                            ds = ds2;
-                            reflect = 1;
-                        }
-                    }
-                    
-                    //-Calculate distance to front wall
-                    if ( ((int)flags & (int)SimFlags::FrontWall) and (PHOTONS.at(i).mu.Z < 0)) {
-                        //If the front wall is closer than the current ds value
-                        ds2 = -PHOTONS.at(i).x.Z/PHOTONS.at(i).mu.Z * k;
-                        if (ds2 <= ds and ds2 >= 0) {
-                            ds = ds2;
-                            reflect = 2;
-                        }
-                    }
+                    if ((int)flags & (int)SimFlags::FrontWall)
+                        grid->collideFront(PHOTONS.at(i).x, PHOTONS.at(i).mu, ds, reflect);
+                    if ((int)flags & (int)SimFlags::BackWall)
+                        grid->collideBack(PHOTONS.at(i).x, PHOTONS.at(i).mu, ds, reflect);
                 }
                 
-                //-If we have periodic X-Y axis, then ignore the walls, otherwise check for collisions
-                if (!((int)flags & (int)SimFlags::PeriodicXY)) {
-                    //-Calculate distance to radial wall
-                    if ((int)flags & (int)SimFlags::RadialWall) {
-                        //Check cylindrical geometry
-                        if ((int)flags & (int)SimFlags::Cartesian)
-                            ds2 = PHOTONS.at(i).intersectXY(R,xy) * k;
-                        else
-                            ds2 = PHOTONS.at(i).intersectR(R) * k;
-                        if (ds2 < ds and ds2 >= 0) {
-                            ds = ds2;
-                            reflect = 3;
-                        }
-                    }
-                }
+                //-Check sides
+                if (!((int)flags & (int)SimFlags::PeriodicXY) && ((int)flags & (int)SimFlags::RadialWall))
+                    grid->collideSide(PHOTONS.at(i).x, PHOTONS.at(i).mu, ds, reflect);
+                
+                //-And time resolved
+                //if ((int)flags & (int)SimFlags::TimeResolved)
+                //  collideTime(PHOTONS.at(i).x, PHOTONS.at(i).mu, ds, reflect);
                 
                 //-Check time boundary
                 if ((int)flags & (int)SimFlags::TimeResolved) {
-                    ds2 = (tsim - PHOTONS.at(i).t) * CONST_C * k;
+                    ds2 = (tsim - PHOTONS.at(i).t) * CONST_C;
                     if (ds2 < ds and ds2 >= 0) {
                         ds = ds2;
                         reflect = 0;
@@ -688,39 +656,18 @@ void Simulation::run() {
                 }
                 
                 //Move photon as necessary and update the incremental shift
-                PHOTONS.at(i).S -= ds;
-                PHOTONS.at(i).x += PHOTONS.at(i).mu * ds / medium.ke(PHOTONS.at(i).v);
-                PHOTONS.at(i).t += ds / k / CONST_C * n;
+                PHOTONS.at(i).S -= ds * k;
+                PHOTONS.at(i).x += PHOTONS.at(i).mu * ds * k / medium.ke(PHOTONS.at(i).v);
+                PHOTONS.at(i).t += ds / CONST_C * n;
                 
-                //TODO: FOR PERIODIC BCs
-                // PHOTON.at(i).x = grid->bound(PHOTON.at(i).x);
-                
-                //Enforce periodic boundaries if we have them
-                if ((int)flags & (int)SimFlags::PeriodicXY) {
-                    if ((int)flags & (int)SimFlags::Cartesian) {
-                        while ( abs(PHOTONS.at(i).x.X) > R )
-                            PHOTONS.at(i).x.X -= copysign(2*R, PHOTONS.at(i).x.X);
-                        while ( abs(PHOTONS.at(i).x.Y) > R )
-                            PHOTONS.at(i).x.Y -= copysign(2*R, PHOTONS.at(i).x.Y);
-                    } else {
-                        if ( PHOTONS.at(i).x.r2() > R*R ) {
-                            u = vec(PHOTONS.at(i).x.X, PHOTONS.at(i).x.Y, 0);
-                            u = u / u.norm();
-                            while ( PHOTONS.at(i).x.r2() > R*R ) {
-                                PHOTONS.at(i).x = PHOTONS.at(i).x - u * 2 * R;
-                            }
-                        }
-                    }
-                }
-                if ((int)flags & (int)SimFlags::PeriodicZ) {
-                    while ( PHOTONS.at(i).x.Z > L )
-                        PHOTONS.at(i).x.Z -= L;
-                    while ( PHOTONS.at(i).x.Z < 0 )
-                        PHOTONS.at(i).x.Z += L;
-                }
+                //Enforce periodic BC's
+                if ((int)flags & (int)SimFlags::PeriodicXY)
+                    grid->boundXY(PHOTONS.at(i).x);
+                if ((int)flags & (int)SimFlags::PeriodicZ)
+                    grid->boundZ(PHOTONS.at(i).x);
                 
                 //TODO: FOR REFLECTION/TRANSMISSION, figure out what can be offloaded to grid
-                // grid->Transmit(PHOTON.at(i), transmit);
+                // grid->Transmit(PHOTON.at(i).x, PHOTON.at(i).mu, m);
                 // Grid needs to have the n0, n, nx, nr values already
                 // Should be able to handle all geometry though (reflection/transmission coeffs, sin/cos angles)
                 // Will need to report both back here to get into stats
@@ -744,10 +691,10 @@ void Simulation::run() {
                 }
                 
                 //Check for reflections from radial wall
-                else if ( reflect == 3) {
+                else if ( reflect >= 3) {
                     //If we have a cartesian system
                     if ((int)flags & (int)SimFlags::Cartesian) {
-                        if (xy) {
+                        if (reflect == 4) {
                             norm = vec(copysign(1,-PHOTONS.at(i).mu.X),0,0);
                             u = PHOTONS.at(i).mu; u.X = -u.X;
                             PHOTONS.at(i).x.X = copysign(R-CONST_EPS, PHOTONS.at(i).mu.X);
@@ -845,15 +792,10 @@ void Simulation::run() {
                 }
                 
                 //Check if we should terminate this packet
-                if (PHOTONS.at(i).W <= Emin && PHOTONS.at(i).W > -CONST_EPS) {
-                    eps = roll();
-                    if (eps <= Wm)
-                        PHOTONS.at(i).W /= Wm;
-                    else {
-                        PHOTONS.at(i).W = 0;
-                        break;
-                    }
-                }
+                //PHOTONS.at(i).roulette();
+                if ((PHOTONS.at(i).W <= Emin) && (PHOTONS.at(i).W > -CONST_EPS)
+                         && !((int)flags & (int)SimFlags::SinglePhoton))
+                    PHOTONS.at(i).roulette();
             }
         }
         
@@ -1008,7 +950,7 @@ bool Simulation::set(const string &key, const vector<string>& val) {
     } else if (!key.compare("simulation-timestep-fluorescence"))
         dTf = stod(val.at(0));
     else if (!key.compare("roulette-newweight"))
-        Wm = stod(val.at(0));
+        Photon::Wm = stod(val.at(0));
     else if (!key.compare("roulette-minweight"))
         Wmin = stod(val.at(0));
     else if (!key.compare("max-steps"))

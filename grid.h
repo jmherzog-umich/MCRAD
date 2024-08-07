@@ -72,6 +72,14 @@ struct Grid {
     virtual void printGrid(ostream& oout) const = 0;
     virtual void printKeys(ostream& oout) const = 0;
 
+    //Collision checks
+    void collideCell(const vec& x, const vec& mu, double& ds, int& reflect) const;
+    virtual void collideFront(const vec& x, const vec& mu, double& ds, int& reflect) const;
+    virtual void collideBack(const vec& x, const vec& mu, double& ds, int& reflect) const;
+    virtual void collideSide(const vec& x, const vec& mu, double& ds, int& reflect) const;
+    virtual void boundXY(vec& x) const;
+    virtual void boundZ(vec& x) const;
+
     //Simple iterator alternative
     long unsigned int ncell() const;
     iterator begin() const;
@@ -317,5 +325,84 @@ bool Grid::less(int id, double val) const {
             return false;
     return true;
 }
+
+void Grid::collideCell(const vec& x, const vec& mu, double& ds, int& reflect) const {
+    double ds2 = intersect(x, mu);
+    if (ds2 <= ds and ds > 0) {
+        ds = ds2;
+        reflect = 0;
+    }
+}
+
+void Grid::collideFront(const vec& x, const vec& mu, double& ds, int& reflect) const {
+    if (mu.Z >= 0)
+        return;
+        
+    double ds2 = -x.Z/mu.Z;
+    if (ds2 <= ds and ds2 >= 0) {
+        ds = ds2;
+        reflect = 2;
+    }
+}
+    
+void Grid::collideBack(const vec& x, const vec& mu, double& ds, int& reflect) const {
+    if (mu.Z <= 0)
+        return;
+        
+    double ds2 = (Lz - x.Z)/mu.Z;
+    if (ds2 <= ds and ds2 >= 0) {
+        ds = ds2;
+        reflect = 1;
+    }
+}
+
+void Grid::collideSide(const vec& x, const vec& mu, double& ds, int& reflect) const {
+    //Allocate variables
+    double sx, sy;
+    
+    //X direction
+    if (abs(mu.X) <= 0)
+        sx = -1;
+    else if (mu.X > 0)
+        sx = (Lx/2.0-x.X)/mu.X;
+    else
+        sx = (-Lx/2.0-x.X)/mu.X;
+    
+    //Y direction
+    if (abs(mu.Y) < 0)
+        sy = -1;
+    else if (mu.Y > 0)
+        sy = (Ly/2.0-x.Y)/mu.Y;
+    else
+        sy = (-Ly/2.0-x.Y)/mu.Y;
+        
+    //First check x
+    if (sx < ds and sx >= 0) {
+        reflect = 3;
+        ds = sx;
+    }
+    
+    //Now check y
+    if (sy < ds and sy >= 0) {
+        reflect = 4;
+        ds = sy;
+    }
+        
+}
+
+void Grid::boundXY(vec& x) const {
+    while (abs(x.X)>Lx)
+        x.X -= copysign(2*Lx, x.X);
+    while (abs(x.Y)>Ly)
+        x.Y -= copysign(2*Ly, x.Y);
+}
+
+void Grid::boundZ(vec& x) const {
+    while ( x.Z > Lz )
+        x.Z -= Lz;
+    while ( x.Z < 0 )
+        x.Z += Lz;
+}
+
 
 #endif

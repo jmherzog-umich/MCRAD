@@ -268,6 +268,18 @@ struct SphGrid : public Grid {
         Ly = 2.0*CONST_PI/(double)ny;
         Lz = CONST_PI/(double)ny;
     }
+    
+    virtual void collideFront(const vec& x, const vec& mu, double& ds, int& reflect) const {
+        return;
+    }
+    
+    virtual void collideBack(const vec& x, const vec& mu, double& ds, int& reflect) const {
+        return;
+    }
+    
+    virtual void collideSide(const vec& x, const vec& mu, double& ds, int& reflect) const {
+        return;
+    }
 };
 
 #endif
