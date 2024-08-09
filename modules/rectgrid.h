@@ -252,6 +252,25 @@ struct RectGrid : public Grid {
             oout << "[X, Z]";
     }
     
+    virtual vec getNormal(int reflect, const vec& x, const vec& mu, vec& mur) {
+        mur = mu;
+        switch (reflect) {
+            default:
+            case 1:
+                mur.Z = -mur.Z;
+                return vec(0,0,-1);
+            case 2:
+                mur.Z = -mur.Z;
+                return vec(0,0,1);
+            case 3:
+                mur.X = -mur.X;
+                return vec(copysign(1,-mu.X),0,0);
+            case 4:
+                mur.Y = -mur.Y;
+                return vec(0,copysign(1,-mu.Y),0);
+        }
+    }
+    
     RectGrid() {
         Lx = Ly = Lz = 1;
         nx = ny = nz = 20;

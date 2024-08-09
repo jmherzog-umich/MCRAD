@@ -280,6 +280,10 @@ struct SphGrid : public Grid {
     virtual void collideSide(const vec& x, const vec& mu, double& ds, int& reflect) const {
         return;
     }
+    
+    virtual vec getNormal(int reflect, const vec& x, const vec& mu, vec& mur) {
+        return vec();
+    }
 };
 
 #endif

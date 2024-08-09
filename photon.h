@@ -52,7 +52,7 @@ struct Photon {
         Photon(const vec& x, const vec& mu, double w, double t0);
         
         //Helper functions
-        void Scatter(double eps1, double eps2, const Medium& p);
+        void Scatter(double eps1, double eps2, const Medium& p, double eps3);
         void Reflect();
         
         void storeRayPath(RayPath& path);
@@ -68,6 +68,7 @@ struct Photon {
         void flipPhase();
         
         void roulette();
+        void Kill();
         
         double phi() const;
         double muR() const;
@@ -117,7 +118,7 @@ void Photon::Reflect() {
 }
 
 //Scatter the photon
-void Photon::Scatter(double eps1, double eps2, const Medium& p) {
+void Photon::Scatter(double eps1, double eps2, const Medium& p, double eps3) {
     //Increment scattering order
     n++;
     
@@ -151,6 +152,14 @@ void Photon::Scatter(double eps1, double eps2, const Medium& p) {
     //Store raypath
     if (pth)
         pth->collide(x, t, W);
+        
+    //Roll new S
+    S = eps3;
+}
+
+void Photon::Kill() {
+    W = -1;
+    S = 0;
 }
 
 double Photon::phi() const {

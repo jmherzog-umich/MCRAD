@@ -557,6 +557,9 @@ void Simulation::run() {
                     jj = grid->ind2(PHOTONS.at(i).x);
                     kk = grid->ind3(PHOTONS.at(i).x);
                     
+                    // TODO: After changes below moving stats into grid, we can combine the grid->at and absorb calls into one.
+                    // 
+                    
                     //Decide if we're treating this as a packet or single-photon
                     if ((int)flags & (int)SimFlags::SinglePhoton) {
                         //Roll to determine scatter or absorb
@@ -574,15 +577,13 @@ void Simulation::run() {
                                 }
                             
                             //And kill the photon
-                            PHOTONS.at(i).W = -1;
-                            PHOTONS.at(i).S = 0;
+                            PHOTONS.at(i).Kill();
                             break;
                             
                         } else { //Scatter
                             grid->at((PHOTONS.at(i).isFluorescence()?3:1), ii,jj,kk) += PHOTONS.at(i).W;
                             stats.scatter(PHOTONS.at(i), PHOTONS.at(i).W);
-                            PHOTONS.at(i).Scatter(roll(), roll(), medium);
-                            PHOTONS.at(i).S = logroll();
+                            PHOTONS.at(i).Scatter(roll(), roll(), medium, logroll());
                         }
                     } else {
                         //Update grids
@@ -598,8 +599,7 @@ void Simulation::run() {
                     
                         //-update photon properties
                         PHOTONS.at(i).W *= ks/k;
-                        PHOTONS.at(i).Scatter(roll(), roll(), medium);
-                        PHOTONS.at(i).S = logroll();
+                        PHOTONS.at(i).Scatter(roll(), roll(), medium, logroll());
                     }
                 }
             
@@ -607,11 +607,11 @@ void Simulation::run() {
                 if ((int)flags & (int)SimFlags::Saturation) {
                     //E = photons absorbed/volume, dens = molecules/volume, E/dens = photons absorbed/molecule
                     if (PHOTONS.at(i).isFluorescence())
-                        Fabs = grid->norm(2, PHOTONS.at(i).x) / medium.dens();
+                        Fabs = grid->dens(2, PHOTONS.at(i).x) / medium.dens();
                     else if ((int)flags & (int)SimFlags::Fluorescence)
-                        Fabs = grid->norm(4, PHOTONS.at(i).x) / medium.dens();
+                        Fabs = grid->dens(4, PHOTONS.at(i).x) / medium.dens();
                     else
-                        Fabs = grid->norm(0, PHOTONS.at(i).x) / medium.dens();
+                        Fabs = grid->dens(0, PHOTONS.at(i).x) / medium.dens();
                     if (Fabs > 0)
                         ka = ka0 / Fabs * (1.0 - exp(-Fabs));
                     else
@@ -642,10 +642,6 @@ void Simulation::run() {
                 if (!((int)flags & (int)SimFlags::PeriodicXY) && ((int)flags & (int)SimFlags::RadialWall))
                     grid->collideSide(PHOTONS.at(i).x, PHOTONS.at(i).mu, ds, reflect);
                 
-                //-And time resolved
-                //if ((int)flags & (int)SimFlags::TimeResolved)
-                //  collideTime(PHOTONS.at(i).x, PHOTONS.at(i).mu, ds, reflect);
-                
                 //-Check time boundary
                 if ((int)flags & (int)SimFlags::TimeResolved) {
                     ds2 = (tsim - PHOTONS.at(i).t) * CONST_C;
@@ -666,65 +662,41 @@ void Simulation::run() {
                 if ((int)flags & (int)SimFlags::PeriodicZ)
                     grid->boundZ(PHOTONS.at(i).x);
                 
-                //TODO: FOR REFLECTION/TRANSMISSION, figure out what can be offloaded to grid
-                // grid->Transmit(PHOTON.at(i).x, PHOTON.at(i).mu, m);
-                // Grid needs to have the n0, n, nx, nr values already
-                // Should be able to handle all geometry though (reflection/transmission coeffs, sin/cos angles)
-                // Will need to report both back here to get into stats
+                //Get normal vector, m, and reflected direction
+                ///NOTE: May need to clip photons to just inside (e.g., L-CONST_EPS) the boundary to make sure nothing weird happens
+                norm = grid->getNormal(reflect, PHOTONS.at(i).x, PHOTONS.at(i).mu, u);
+                if (reflect == 1)
+                    m = n/nx;
+                else if (reflect == 2)
+                    m = n/n0;
+                else if (reflect > 3)
+                    m = n/nr;
                 
-                //Look for transmission events (hitting back surface) from the current cell
-                if ( reflect == 1 ) {
-                    //Set new direction and m value
-                    norm = vec(0,0,-1);
-                    u = PHOTONS.at(i).mu; u.Z = -u.Z;
-                    PHOTONS.at(i).x.Z = L-CONST_EPS;
-                    m = n / nx;
-                }
-                
-                //Look for reflection events (front surface interaction) from the current cell
-                else if ( reflect == 2 ) {
-                    //Set new direction and m value
-                    norm = vec(0,0,1);
-                    u = PHOTONS.at(i).mu; u.Z = -u.Z;
-                    PHOTONS.at(i).x.Z = CONST_EPS;
-                    m = n / n0;
-                }
-                
-                //Check for reflections from radial wall
-                else if ( reflect >= 3) {
-                    //If we have a cartesian system
-                    if ((int)flags & (int)SimFlags::Cartesian) {
-                        if (reflect == 4) {
-                            norm = vec(copysign(1,-PHOTONS.at(i).mu.X),0,0);
-                            u = PHOTONS.at(i).mu; u.X = -u.X;
-                            PHOTONS.at(i).x.X = copysign(R-CONST_EPS, PHOTONS.at(i).mu.X);
-                        } else {
-                            norm = vec(0,copysign(1,-PHOTONS.at(i).mu.Y),0);
-                            u = PHOTONS.at(i).mu; u.Y = -u.Y;
-                            PHOTONS.at(i).x.Y = copysign(R-CONST_EPS, PHOTONS.at(i).mu.Y);
-                        }
-                    } else {
-                        //Set new direction
-                        norm = PHOTONS.at(i).x; norm.Z = 0; norm = -norm / norm.norm();
-                        c = norm.dot(PHOTONS.at(i).mu);
-                        u = PHOTONS.at(i).mu - norm * c * 2.0;
-                        
-                        //Make sure we go just below r = R
-                        tempR = (R - CONST_EPS) / PHOTONS.at(i).x.r();
-                        PHOTONS.at(i).x.X = PHOTONS.at(i).x.X * tempR;
-                        PHOTONS.at(i).x.Y = PHOTONS.at(i).x.Y * tempR;
-                    }
-                    m = n / nr;
-                }
+                //TODO: Offload the following onto grid, and have grid own stats.
+                // Instead of imgT and imgR, grid should hold two additional 2D arrays
+                // to store reflect/transmit images (for sphere, e.g., they should map to 
+                // the hemispherical front or back surface).
+                //
+                // Then we call reflect or transmit function with "reflect" argument to
+                // determine side, along with given normal, u, and m, and it should 
+                // add the contribution to imgT/imgR (now members of grid) and update the
+                // actual stats at the same time.
+                //
+                // We can also offload the transmitted photon generation/propagation to 
+                // the camera class so we just call, e.g., cam->transmitAndImage(PHOTON.at(i), norm, m, 1-tempR);
+                // where tempR = 0 for single photon mode
                 
                 //And implement the reflections
                 if (reflect) {
+                
                     //Calculate reflection coefficient and sint
                     tempR = stats.getR(PHOTONS.at(i).mu, norm, m, sint);
                     c = norm.dot(PHOTONS.at(i).mu);
                     
                     //Single-photon mode or photon packet mode
                     if ((int)flags & (int)SimFlags::SinglePhoton) {
+                    
+                        //Figure out if we reflect or transmit
                         eps = roll();
                         if (eps < tempR) { //Reflect
                             //If reflecting off higher index, flip phase
@@ -785,6 +757,7 @@ void Simulation::run() {
                 //Break here if we're dynamic and the photon time reaches tsim
                 if (((int)flags & (int)SimFlags::TimeResolved) and (PHOTONS.at(i).t >= tsim))
                     break;
+                    
                 //... or if we're static and we reach a small enough S value  
                 if (!((int)flags & (int)SimFlags::TimeResolved) and (PHOTONS.at(i).S <= CONST_EPS)) {
                     PHOTONS.at(i).S = 0;

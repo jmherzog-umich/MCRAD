@@ -79,6 +79,7 @@ struct Grid {
     virtual void collideSide(const vec& x, const vec& mu, double& ds, int& reflect) const;
     virtual void boundXY(vec& x) const;
     virtual void boundZ(vec& x) const;
+    virtual vec getNormal(int reflect, const vec& x, const vec& mu, vec& mur) = 0;
 
     //Simple iterator alternative
     long unsigned int ncell() const;
@@ -89,7 +90,7 @@ struct Grid {
     double& at(int id, const vec& x);
     double& at(const vec& x);
     
-    double norm(int id, const vec& x) const;
+    double dens(int id, const vec& x) const;
     
     double Volume(long unsigned int i) const;
     double Volume(const vec& x) const;
@@ -185,7 +186,7 @@ void Grid::print(ostream& oout, bool ALL) const {
     }
 }
 
-double Grid::norm(int id, const vec& x) const {
+double Grid::dens(int id, const vec& x) const {
     long unsigned int ii, jj, kk;
     ii = ind1(x); jj = ind2(x); kk = ind3(x);
     return m.at(id).at(sub2ind(ii, jj, kk)) / Volume(ii, jj, kk);

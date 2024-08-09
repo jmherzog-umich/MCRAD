@@ -295,6 +295,25 @@ struct CylGrid : public Grid {
         while ( x.r2() > Lx*Lx )
             x = x - u * 2 * Lx;
     }
+    
+    virtual vec getNormal(int reflect, const vec& x, const vec& mu, vec& mur) {
+        mur = mu;
+        switch (reflect) {
+            default:
+            case 1:
+                mur.Z = -mur.Z;
+                return vec(0,0,-1);
+            case 2:
+                mur.Z = -mur.Z;
+                return vec(0,0,1);
+            case 3:
+                vec norm = x;
+                norm.Z = 0;
+                norm = -norm / norm.norm();
+                mur = mu - norm * norm.dot(mu) * 2.0;
+                return norm;
+        }
+    }
 };
 
 #endif
