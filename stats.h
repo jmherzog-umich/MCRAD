@@ -81,8 +81,8 @@ struct Stats {
     void printTime(ostream& oout) const;
     void printFreq(ostream& oout) const;
     
-    void writedb(ofstream& OF) const;
-    void writedbheader(ofstream& OF) const;
+    void writedb(ostream& OF) const;
+    void writedbheader(ostream& OF) const;
     
     //--Functions to aggregate data
     void scatter(const Photon& p, double w);
@@ -991,11 +991,11 @@ void Stats::print(ostream& oout) const {
     oout << "  Dz = " << DZ/ND/2.0 << endl;
 }
 
-void Stats::writedbheader(ofstream& OF) const {
+void Stats::writedbheader(ostream& OF) const {
     OF << "Trans,Ref0,RefD,TransS,TransB,Abs,FGen,FAbs,Ff,Fb,Fs,Ffb,Fbb,Fsb,Pen,RadL,Rad0";
 }
 
-void Stats::writedb(ofstream& OF) const {
+void Stats::writedb(ostream& OF) const {
     OF << scientific << setprecision(8) << Tdiffuse/PHI << ",";
     OF << scientific << setprecision(8) << Rspec/PHI << ",";
     OF << scientific << setprecision(8) << Rdiffuse/PHI << ",";

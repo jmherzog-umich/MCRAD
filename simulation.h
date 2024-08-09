@@ -62,9 +62,10 @@ class Simulation {
         void printstatusheader();
         void printsettings();
         
-        void write(string s) const;
-        void writedb(ofstream& OF) const;
-        void writedbheader(ofstream& OF) const;
+        string getdbline() const;
+        void write(string s, string line) const;
+        void writedb(ostream& OF) const;
+        void writedbheader(ostream& OF) const;
         
         enum struct SimFlags {
             BackWall                = 0b000000000001,     //Whether there is a backwall in the simulation or semi-infinite
@@ -1079,11 +1080,11 @@ void Simulation::load(stringstream& settings) {
         return;
 }
 
-void Simulation::writedbheader(ofstream& OF) const {
+void Simulation::writedbheader(ostream& OF) const {
     OF << "N0,L,R,dT,dTf,flags,n0,nx,nr";
 }
 
-void Simulation::writedb(ofstream& OF) const {
+void Simulation::writedb(ostream& OF) const {
     OF << setprecision(8) << N0 << ",";
     OF << setprecision(8) << L << ",";
     OF << setprecision(8) << R << ",";
@@ -1096,10 +1097,28 @@ void Simulation::writedb(ofstream& OF) const {
 }
 
 
-void Simulation::write(string s) const {
+string Simulation::getdbline() const {
+    //Create a string stream to store the text in
+    stringstream line;
+    
+    //Generate it chunk by chunk
+    writedb(line);
+    line << ",";
+    beam.writedb(line);
+    line << ",";
+    medium.writedb(line);
+    line << ",";
+    stats.writedb(line);
+    line << endl;
+    
+    return line.str();
+}
+
+void Simulation::write(string s, string line) const {
     //Check if string is empty
     if (s.empty()) {
-        s = makefilename(dbfile, "csv", id);
+        //Don't use ID in filename since we want to write all to the same file. Write lock issues?
+        s = makefilename(dbfile, "csv", -1);
         if (s.empty())
             return;
     }
@@ -1120,14 +1139,7 @@ void Simulation::write(string s) const {
     }
     
     //Now write the row
-    writedb(OF);
-    OF << ",";
-    beam.writedb(OF);
-    OF << ",";
-    medium.writedb(OF);
-    OF << ",";
-    stats.writedb(OF);
-    OF << endl;
+    OF << line;
     
     //Close file
     OF.close();
@@ -1162,7 +1174,6 @@ void Simulation::exec() {
     setup();
     run();
     print();
-    write("");
 }
 
 #endif

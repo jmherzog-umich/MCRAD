@@ -49,8 +49,8 @@ struct Beam {
     
     bool set(const string& key, const vector<string>& val);
     
-    void writedbheader(ofstream& OF) const;
-    void writedb(ofstream& OF) const;
+    void writedbheader(ostream& OF) const;
+    void writedb(ostream& OF) const;
     
     vector<Photon> sampleBeam(unsigned long int N);
 };
@@ -267,11 +267,11 @@ vector<Photon> Beam::sampleBeam(unsigned long int N0) {
     return PHOTONS;
 }
 
-void Beam::writedbheader(ofstream& OF) const {
+void Beam::writedbheader(ostream& OF) const {
     OF << "E";
 }
 
-void Beam::writedb(ofstream& OF) const {
+void Beam::writedb(ostream& OF) const {
     OF << scientific << setprecision(8) << E;
 }
 

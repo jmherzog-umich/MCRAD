@@ -34,13 +34,57 @@ bool isvec(const string& s) {
 
 string makefilename(const string& name, const string& ext, int id) {
     string base = name.substr(0, name.find('.'));
-    return base + "." + to_string(id) + "." + ext;
+    if (id >= 0)
+        return base + "." + to_string(id) + "." + ext;
+    else
+        return base + "." + ext;
 }
 
 void writeheader(ostream& oout, string label) {
     oout << "==================================================================" << endl;
     oout << label << endl;
     oout << "==================================================================" << endl;
+}
+
+vector<string> evalrange(const string& t, int id, int max) {
+    //First, exit quick if this value isn't a range
+    vector<string> out;
+    unsigned long int i0 = t.find(":");
+    if (i0 == string::npos) {
+        out.push_back(t);
+        return out;
+    }
+    double x0, xf, dx;
+    unsigned long int i2 = t.find(":", i0+1);
+    
+    //Now get the values
+    bool log = false;
+    x0 = stod(t.substr(0, i0));
+    if (i2 == string::npos) {
+        xf = stod(t.substr(i0+1));
+        dx = 1;
+    } else {
+        
+        //Check for logscale
+        if (t.at(i2+1) == '*')
+            log = true;
+            
+        //Now get values
+        xf = stod(t.substr(i0+1, i2-i0-1));
+        if (log)
+            dx = stod(t.substr(i2+2));
+        else
+            dx = stod(t.substr(i2+1));
+    }
+    
+    //Now loop through the range
+    int i = 0;
+    for (double x = x0; x <= xf; (log) ? x*=dx : x+=dx) {
+        if (i % max == id)
+            out.push_back(to_string(x));
+        i++;
+    }
+    return out;
 }
 
 string readfile(const string& name) {

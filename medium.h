@@ -44,8 +44,8 @@ struct Medium {
     
     void print(ostream& oout) const;
     void print_at_f(ostream& oout, double f) const;
-    void writedbheader(ofstream& OF) const;
-    void writedb(ofstream& OF) const;
+    void writedbheader(ostream& OF) const;
+    void writedb(ostream& OF) const;
     
     bool set(const string& key, const vector<string>& val);
     
@@ -284,11 +284,11 @@ double Medium::emit_v(double eps, double w) const {
     return xf.sample();
 }
 
-void Medium::writedbheader(ofstream& OF) const {
+void Medium::writedbheader(ostream& OF) const {
     OF << "n,dens,phaseFxn,xca,xcs,xf,g,Ss,Sa,a,tau,FQY";
 }
 
-void Medium::writedb(ofstream& OF) const {
+void Medium::writedb(ostream& OF) const {
     OF << setprecision(8) << n() << ",";
     OF << setprecision(8) << dens() << ",";
     OF << _phasemodelname(phase) << ",";
