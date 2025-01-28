@@ -176,24 +176,24 @@ void Simulation::setid(int n) {
 
 void Simulation::print() {
     //Write output file
-    writeheader(oout, "Reflected beam intensity profile [photons]");
+    util::writeheader(oout, "Reflected beam intensity profile [photons]");
     imgR.printGrid(oout);
     imgR.print(oout);
     
-    writeheader(oout, "Transmitted beam intensity profile [photons]");
+    util::writeheader(oout, "Transmitted beam intensity profile [photons]");
     imgT.printGrid(oout);
     imgT.print(oout);
 
-    writeheader(oout, "Simulated image");
+    util::writeheader(oout, "Simulated image");
     cam.printGrid(oout);
     cam.print(oout);
 
-    writeheader(oout, "Statistics");
+    util::writeheader(oout, "Statistics");
     stats.print(oout);
     
     //Store path data
     if (storepaths) {
-        string fname = makefilename(RayPath::ofbasename, "xyz", id);
+        string fname = util::makefilename(RayPath::ofbasename, "xyz", id);
         cerr << "Writing " << PATHS.size() << " paths to xyz file: " << fname << endl;
         ofstream FILE(fname);
         for (unsigned long int j = 0; j < PATHS.size(); j ++)
@@ -216,17 +216,17 @@ void Simulation::genBeam() {
 
 void Simulation::emitPhoton(const vec& x, double W0, double t0) {
     //Calculate direction
-    double eps = 2*roll() - 1;
-    double sint = sin(2*CONST_PI*roll());
+    double eps = 2*util::roll() - 1;
+    double sint = sin(2*CONST_PI*util::roll());
     Photon pt;
     
     //Create fluorescence photon
     pt.x = x;
     pt.mu = vec(eps * sint, sqrt(1-eps*eps)*sint, sqrt(1-sint*sint));
     pt.t = t0;
-    pt.v = medium.emit_v(roll());
+    pt.v = medium.emit_v(util::roll());
     pt.W = W0 * medium.FQY();
-    pt.S = logroll();
+    pt.S = util::logroll();
     pt.flags = (Photon::PhotonFlags)5;
     
     //Store ray paths of fluorescence data 
@@ -301,7 +301,7 @@ void Simulation::printsettings() {
     double Tspec = 1.0 - Rspec;
     
     //Print some settings
-    writeheader(oout, "Settings [UNITS: um, ps, THz]");
+    util::writeheader(oout, "Settings [UNITS: um, ps, THz]");
     oout << "Back Wall: " << (((int)flags & (int)SimFlags::BackWall) ? "True" : "False" ) << endl;
     oout << "Front Wall: " << (((int)flags & (int)SimFlags::FrontWall) ? "True" : "False" ) << endl;
     oout << "Radial Wall: " << (((int)flags & (int)SimFlags::RadialWall) ? "True" : "False" ) << endl;
@@ -343,7 +343,7 @@ void Simulation::printsettings() {
     oout << "  T0  = " << Tspec << endl << endl;
     
     //Print medium settings
-    writeheader(oout, "Medium properties");
+    util::writeheader(oout, "Medium properties");
     medium.print(oout);
     oout << "Peak incident frequency: " << beam.beamspec.peak() << " THz" << endl;
     medium.print_at_f(oout, beam.beamspec.peak());
@@ -351,25 +351,25 @@ void Simulation::printsettings() {
     medium.print_at_f(oout, medium.peak_v());
     
     //Print beam info
-    writeheader(oout, "Source properties");
+    util::writeheader(oout, "Source properties");
     beam.print(oout);
         
     //Print camera info
-    writeheader(oout, "Camera properties");
+    util::writeheader(oout, "Camera properties");
     cam.printSetup(oout);
         
     //Define output arrays
-    writeheader(oout, "Output grid settings");
+    util::writeheader(oout, "Output grid settings");
     grid->printGrid(oout);
     
     //Print the initial condition
-    writeheader(oout, "Initial condition");
+    util::writeheader(oout, "Initial condition");
     oout << "Incident beam profile before specular reflection [photons]:" << endl;
     imgIC.printGrid(oout);
     imgIC.print(oout);
     
     //Warn the user
-    writeheader(oout, "Starting simulation");
+    util::writeheader(oout, "Starting simulation");
 }
 
 void Simulation::setup() {
@@ -382,7 +382,7 @@ void Simulation::setup() {
     
     //Create output stream
     if (outputfile) {
-        ofile.open(makefilename(basename, "out", id));
+        ofile.open(util::makefilename(basename, "out", id));
         obuffer = ofile.rdbuf();
     } else
         obuffer = cout.rdbuf();
@@ -426,7 +426,7 @@ void Simulation::setup() {
         //Reflect photons at interface
         R = stats.initialize(PHOTONS.at(i), n0/medium.n(PHOTONS.at(i).v));
         PHOTONS.at(i).W *= (1-R);
-        PHOTONS.at(i).S = logroll();
+        PHOTONS.at(i).S = util::logroll();
         
         //Generate raypath objects if needed
         if (i < storepaths)
@@ -564,7 +564,7 @@ void Simulation::run() {
                     //Decide if we're treating this as a packet or single-photon
                     if ((int)flags & (int)SimFlags::SinglePhoton) {
                         //Roll to determine scatter or absorb
-                        eps = roll();
+                        eps = util::roll();
                         if (eps < ka/k) { //Absorb
                             //Calculate stats
                             grid->at((PHOTONS.at(i).isFluorescence()?2:0), ii,jj,kk) += PHOTONS.at(i).W;
@@ -574,7 +574,7 @@ void Simulation::run() {
                             if ((int)flags & (int)SimFlags::Fluorescence)
                                 if (((int)flags & (int)SimFlags::FluorescenceTrapping) || (!PHOTONS.at(i).isFluorescence())){
                                     grid->at(4, ii,jj,kk) += PHOTONS.at(i).W;
-                                    emitPhoton(PHOTONS.at(i).x, PHOTONS.at(i).W, tsim + medium.emit_tau(logroll()));
+                                    emitPhoton(PHOTONS.at(i).x, PHOTONS.at(i).W, tsim + medium.emit_tau(util::logroll()));
                                 }
                             
                             //And kill the photon
@@ -584,7 +584,7 @@ void Simulation::run() {
                         } else { //Scatter
                             grid->at((PHOTONS.at(i).isFluorescence()?3:1), ii,jj,kk) += PHOTONS.at(i).W;
                             stats.scatter(PHOTONS.at(i), PHOTONS.at(i).W);
-                            PHOTONS.at(i).Scatter(roll(), roll(), medium, logroll());
+                            PHOTONS.at(i).Scatter(util::roll(), util::roll(), medium, util::logroll());
                         }
                     } else {
                         //Update grids
@@ -600,7 +600,7 @@ void Simulation::run() {
                     
                         //-update photon properties
                         PHOTONS.at(i).W *= ks/k;
-                        PHOTONS.at(i).Scatter(roll(), roll(), medium, logroll());
+                        PHOTONS.at(i).Scatter(util::roll(), util::roll(), medium, util::logroll());
                     }
                 }
             
@@ -698,7 +698,7 @@ void Simulation::run() {
                     if ((int)flags & (int)SimFlags::SinglePhoton) {
                     
                         //Figure out if we reflect or transmit
-                        eps = roll();
+                        eps = util::roll();
                         if (eps < tempR) { //Reflect
                             //If reflecting off higher index, flip phase
                             if (m < 1)
@@ -1090,7 +1090,7 @@ void Simulation::writedb(ostream& OF) const {
     OF << setprecision(8) << R << ",";
     OF << setprecision(8) << dT << ",";
     OF << setprecision(8) << dTf << ",";
-    OF << setprecision(8) << bitstring((unsigned short)flags) << ",";
+    OF << setprecision(8) << util::bitstring((unsigned short)flags) << ",";
     OF << setprecision(8) << n0 << ",";
     OF << setprecision(8) << nx << ",";
     OF << setprecision(8) << nr;
@@ -1118,7 +1118,7 @@ void Simulation::write(string s, string line) const {
     //Check if string is empty
     if (s.empty()) {
         //Don't use ID in filename since we want to write all to the same file. Write lock issues?
-        s = makefilename(dbfile, "csv", -1);
+        s = util::makefilename(dbfile, "csv", -1);
         if (s.empty())
             return;
     }
@@ -1157,7 +1157,7 @@ void Simulation::readArgs(const vector<string>& args) {
         
         //Get value if we didn't get the end of the string
         if (i < args.size()) {
-            arg = splitcomma(args.at(i));
+            arg = util::splitcomma(args.at(i));
             i ++;
         } else
             arg = {""};

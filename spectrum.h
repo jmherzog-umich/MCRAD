@@ -264,20 +264,20 @@ double Spectrum::width() const {
 
 //Randomly samples the spectrum model
 double Spectrum::sample() const {
-    double tmp, eps = roll();
+    double tmp, eps = util::roll();
     switch (type) {
         case SpectrumModel::Constant :
             return Fmin + (Fmax-Fmin)*eps;
             break;
         case SpectrumModel::Binary :
             tmp = S.at(1)/(S.at(1)+S.at(2));
-            return (roll() <= tmp) ? (Fmin + (S.at(0)-Fmin)*eps) : (S.at(0) + (Fmax-S.at(0))*eps);
+            return (util::roll() <= tmp) ? (Fmin + (S.at(0)-Fmin)*eps) : (S.at(0) + (Fmax-S.at(0))*eps);
             break;
         case SpectrumModel::Uniform : 
             return S.at(0) + (S.at(1)-S.at(0))*eps;
             break;
         case SpectrumModel::Gaussian :
-            return S.at(0) + S.at(1) * sqrt(2) * erfinvf(2*(float)eps-1);
+            return S.at(0) + S.at(1) * sqrt(2) * util::erfinvf(2*(float)eps-1);
             break;
         case SpectrumModel::Cauchy :
             return S.at(0) + S.at(0) * tan(CONST_PI * (eps-0.5));
@@ -289,16 +289,16 @@ double Spectrum::sample() const {
             return S.at(0);
             break;
         case SpectrumModel::DoubleGauss :
-            if (roll() <= S.at(2))
-                return S.at(0) + S.at(1) * sqrt(2) * erfinvf(2*(float)eps-1);
+            if (util::roll() <= S.at(2))
+                return S.at(0) + S.at(1) * sqrt(2) * util::erfinvf(2*(float)eps-1);
             else
-                return S.at(3) + S.at(4) * sqrt(2) * erfinvf(2*(float)eps-1);
+                return S.at(3) + S.at(4) * sqrt(2) * util::erfinvf(2*(float)eps-1);
             break;
         case SpectrumModel::Blackbody :
             //Use rejection sampling
             while(true) {
-                tmp = (Fmin + (Fmax-Fmin)*roll()) * CONST_HK / S.at(0);
-                if (roll() <= (tmp*tmp/(exp(tmp)-1)/CONST_PLANCKMAX))
+                tmp = (Fmin + (Fmax-Fmin)*util::roll()) * CONST_HK / S.at(0);
+                if (util::roll() <= (tmp*tmp/(exp(tmp)-1)/CONST_PLANCKMAX))
                     return tmp/CONST_HK*S.at(0);
             } break;
         default:

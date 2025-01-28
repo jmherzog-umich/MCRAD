@@ -70,9 +70,9 @@ struct SphGrid : public Grid {
     
     virtual vec rand(long unsigned int i, long unsigned int j, long unsigned int k) const {
         vec out;
-        double r = cbrt(roll() * (3*i*i+3*i+1) + i*i*i)*Lx/nx;
-        double eps = cos(CONST_PI/nz*(k+roll()));
-        double sth = sin(2*CONST_PI*(j+roll())/ny);
+        double r = cbrt(util::roll() * (3*i*i+3*i+1) + i*i*i)*Lx/nx;
+        double eps = cos(CONST_PI/nz*(k+util::roll()));
+        double sth = sin(2*CONST_PI*(j+util::roll())/ny);
         out.X = r * sqrt(1-sth*sth) * eps;
         out.Y = r * sth * eps;
         out.Z = r * sqrt(1-eps*eps);

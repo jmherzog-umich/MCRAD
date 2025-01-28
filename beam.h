@@ -135,8 +135,8 @@ vector<Photon> Beam::sampleBeam(unsigned long int N0) {
                 switch (beamprofile) {
                     case BeamType::Uniform :
                         //Random numbers
-                        eps2 = roll();
-                        eps = roll();
+                        eps2 = util::roll();
+                        eps = util::roll();
                         
                         //Calculation
                         x = Rb * sqrt(eps) * cos(2.0 * CONST_PI * eps2);
@@ -145,30 +145,30 @@ vector<Photon> Beam::sampleBeam(unsigned long int N0) {
                         
                     case BeamType::Gaussian :
                         //Random numbers
-                        eps2 = roll();
+                        eps2 = util::roll();
                         
                         //Calculation
-                        x = Rb * erfinvf(rollf());
+                        x = Rb * util::erfinvf(util::rollf());
                         y = x * sin(2.0 * CONST_PI * eps2);
                         x = x * cos(2.0 * CONST_PI * eps2);
                         break;
                         
                     case BeamType::UniformEllipse :
-                        eps2 = atan(Sb/Rb*tan(2*CONST_PI*roll()));
-                        eps = Sb*Rb/hypot(Sb*cos(eps2), Rb*sin(eps2)) * sqrt(roll());
+                        eps2 = atan(Sb/Rb*tan(2*CONST_PI*util::roll()));
+                        eps = Sb*Rb/hypot(Sb*cos(eps2), Rb*sin(eps2)) * sqrt(util::roll());
                         x = eps*cos(eps2);
                         y = eps*sin(eps2);
                         break;
                         
                     case BeamType::GaussianEllipse :
-                        x = Rb * erfinvf(rollf());
-                        y = Sb * erfinvf(rollf());
+                        x = Rb * util::erfinvf(util::rollf());
+                        y = Sb * util::erfinvf(util::rollf());
                         break;
                         
                     case BeamType::UniformAnnulus :
                         //Random numbers
-                        eps2 = roll();
-                        eps = roll();
+                        eps2 = util::roll();
+                        eps = util::roll();
                         
                         //Calculation
                         x = sqrt(Sb*Sb + (Rb*Rb-Sb*Sb)*eps) * cos(2.0 * CONST_PI * eps2);
@@ -177,10 +177,10 @@ vector<Photon> Beam::sampleBeam(unsigned long int N0) {
                         
                     case BeamType::GaussianAnnulus :
                         //Random numbers
-                        eps2 = roll();
+                        eps2 = util::roll();
                         
                         //Calculation
-                        x = Rb + (Sb - Rb) * erfinvf(rollf());
+                        x = Rb + (Sb - Rb) * util::erfinvf(util::rollf());
                         y = x * sin(2.0 * CONST_PI * eps2);
                         x = x * cos(2.0 * CONST_PI * eps2);
                         break;
@@ -210,14 +210,14 @@ vector<Photon> Beam::sampleBeam(unsigned long int N0) {
         if (Tb > 0) {
             switch (beamdur) {
                 case BeamDuration::Uniform :
-                    PHOTONS.at(i).t = roll() * Tb;
+                    PHOTONS.at(i).t = util::roll() * Tb;
                     break;
                 case BeamDuration::Gaussian :
-                    PHOTONS.at(i).t = Tb * erfinvf(rollf());
+                    PHOTONS.at(i).t = Tb * util::erfinvf(util::rollf());
                     break;
                     
                 case BeamDuration::Cauchy :
-                    PHOTONS.at(i).t = -Tb / tan(CONST_PI * roll());
+                    PHOTONS.at(i).t = -Tb / tan(CONST_PI * util::roll());
                     break;
             }
         }
@@ -247,22 +247,22 @@ vector<Photon> Beam::sampleBeam(unsigned long int N0) {
                 x = 1.0;
                 break;
             case BeamSpread::Gaussian :
-                x = 1.0 - Sp * erfinvf(rollf());
+                x = 1.0 - Sp * util::erfinvf(util::rollf());
                 break;
             case BeamSpread::Lambertian :
                 if (Pb > 0)
-                    x = sqrt(1.0 - pow(roll()*Sp,2));
+                    x = sqrt(1.0 - pow(util::roll()*Sp,2));
                 else
-                    x = sqrt(1.0 - pow(roll(),2));
+                    x = sqrt(1.0 - pow(util::roll(),2));
                 break;
             case BeamSpread::Isotropic :
                 if (Pb > 0)
-                    x = 1.0 - roll()*Sp;
+                    x = 1.0 - util::roll()*Sp;
                 else
-                    x = 1.0 - roll();
+                    x = 1.0 - util::roll();
                 break;
         }
-        PHOTONS.at(i).mu = PHOTONS.at(i).mu * x + PHOTONS.at(i).mu.perp(roll()*2*CONST_PI) * sqrt(1.0-x*x);
+        PHOTONS.at(i).mu = PHOTONS.at(i).mu * x + PHOTONS.at(i).mu.perp(util::roll()*2*CONST_PI) * sqrt(1.0-x*x);
     }
     return PHOTONS;
 }

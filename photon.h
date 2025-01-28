@@ -229,7 +229,7 @@ void Photon::clearRayPath() {
 }
 
 void Photon::roulette() {
-    double eps = roll();
+    double eps = util::roll();
     if (eps <= Photon::Wm)
         W /= Photon::Wm;
     else {

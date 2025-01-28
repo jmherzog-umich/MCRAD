@@ -69,11 +69,11 @@ struct CylGrid : public Grid {
     
     virtual vec rand(long unsigned int i, long unsigned int j, long unsigned int k) const {
         vec out;
-        double r = sqrt(roll() * (2*i+1) + i*i)*Lx/nx;
-        double sth = sin(2*CONST_PI*(j+roll())/ny);
+        double r = sqrt(util::roll() * (2*i+1) + i*i)*Lx/nx;
+        double sth = sin(2*CONST_PI*(j+util::roll())/ny);
         out.X = sqrt(1-sth*sth) * r;
         out.Y = sth * r;
-        out.Z = (k-1 + roll())*Lz/nz;
+        out.Z = (k-1 + util::roll())*Lz/nz;
         return out;
     }
     

@@ -38,7 +38,7 @@ int main(int argc, char** argv) {
     #endif
     
     //Initialize random number generator and some other things
-    rand_init();
+    util::rand_init();
     cout.precision(10);
     
     //Create a simulation
@@ -68,7 +68,7 @@ int main(int argc, char** argv) {
     //Check if we have an input file and process any other arguments in main process
     if (pRank == 0) {
         if (argc > 0)
-            args = readfile(argv[1]);
+            args = util::readfile(argv[1]);
         for (int i = 2; i < argc; i ++) {
             inputs.append(argv[i]);
             inputs.append("\n");
@@ -105,7 +105,7 @@ int main(int argc, char** argv) {
     while (getline(isstream, buf)) {
         if (buf.find(":") != string::npos) {
             //Store all settings in an array
-            ranges.push_back(evalrange(buf, pRank, pSize));
+            ranges.push_back(util::evalrange(buf, pRank, pSize));
             rangeids.push_back(settings.size());
             
             //Set the buffer to the zero index setting
